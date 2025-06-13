@@ -2,14 +2,11 @@
 
 use std::{
     fs::File,
-    io::{BufReader, BufWriter},
+    io:: BufWriter ,
     path::Path,
 };
 
 use bincode;
-use serde::{Serialize, de::DeserializeOwned};
-
-use pyo3::exceptions::PyIOError;
 
 use crate::errors::RustAnnError;
 use crate::index::AnnIndex;
