@@ -1,6 +1,6 @@
 # batch_benchmark.py
 
-import time
+import time,json,argparse
 import numpy as np
 from rust_annie import AnnIndex, Distance
 
@@ -23,8 +23,21 @@ def benchmark_batch(N=10000, D=64, k=10, batch_size=64, repeats=20):
         idx.search_batch(queries, k)
     t_batch = (time.perf_counter() - t0) / repeats
 
-    print(f"Rust batch search time ({batch_size} queries): {t_batch*1e3:8.3f} ms")
-    print(f"Per-query time:                  {t_batch/batch_size*1e3:8.3f} ms")
+    results = {
+        "batch_time_ms": t_batch * 1e3,
+        "per_query_time_ms": (t_batch / batch_size) * 1e3
+    }
+
+    return results
 
 if __name__ == "__main__":
-    benchmark_batch()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", type=str, help="Path to write benchmark results")
+    args = parser.parse_args()
+
+    results = benchmark_batch()
+    print(json.dumps(results, indent=2))
+
+    if args.output:
+        with open(args.output, "w") as f:
+            json.dump(results, f)
