@@ -29,7 +29,7 @@ impl AnnIndex {
     #[new]
     pub fn new(dim: usize, metric: Distance) -> PyResult<Self> {
         if dim == 0 {
-            return Err(RustAnnError::py_err("Dimension must be > 0"));
+            return Err(RustAnnError::py_err("Invalid Dimension","Dimension must be > 0"));
         }
         Ok(AnnIndex {
             dim,
@@ -43,10 +43,10 @@ impl AnnIndex {
     #[staticmethod]
     pub fn new_minkowski(dim: usize, p: f32) -> PyResult<Self> {
         if dim == 0 {
-            return Err(RustAnnError::py_err("Dimension must be > 0"));
+            return Err(RustAnnError::py_err("Invalid Dimension","Dimension must be > 0"));
         }
         if p <= 0.0 {
-            return Err(RustAnnError::py_err("`p` must be > 0 for Minkowski distance"));
+            return Err(RustAnnError::py_err("Minkowski Error","`p` must be > 0 for Minkowski distance"));
         }
         Ok(AnnIndex {
             dim,
@@ -66,14 +66,15 @@ impl AnnIndex {
         let view = data.as_array();
         let ids = ids.as_slice()?;
         if view.nrows() != ids.len() {
-            return Err(RustAnnError::py_err("`data` and `ids` must have same length"));
+            return Err(RustAnnError::py_err("Input Mismatch","`data` and `ids` must have same length"));
         }
         for (row, &id) in view.outer_iter().zip(ids) {
             let v = row.to_vec();
             if v.len() != self.dim {
-                return Err(RustAnnError::py_err(format!(
-                    "Expected dimension {}, got {}", self.dim, v.len()
-                )));
+                return Err(RustAnnError::py_err(
+                    "Dimension Error",
+                    format!("Expected dimension {}, got {}", self.dim, v.len()))
+                );
             }
             let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
             self.entries.push((id, v, sq_norm));
@@ -146,9 +147,9 @@ impl AnnIndex {
 
         // Build (n × k) ndarrays
         let ids_arr: Array2<i64> = Array2::from_shape_vec((n, k), all_ids)
-            .map_err(|e| RustAnnError::py_err(format!("Reshape ids failed: {}", e)))?;
+            .map_err(|e| RustAnnError::py_err("Reshape Error",format!("Reshape ids failed: {}", e)))?;
         let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists)
-            .map_err(|e| RustAnnError::py_err(format!("Reshape dists failed: {}", e)))?;
+            .map_err(|e| RustAnnError::py_err("Reshape Error",format!("Reshape dists failed: {}", e)))?;
 
         Ok((
             ids_arr.into_pyarray(py).to_object(py),
@@ -174,7 +175,7 @@ impl AnnIndex {
     /// Core search logic covering L2, Cosine, L1 (Manhattan), L∞ (Chebyshev), and Lₚ.
     fn inner_search(&self, q: &[f32], q_sq: f32, k: usize) -> PyResult<(Vec<i64>, Vec<f32>)> {
         if q.len() != self.dim {
-            return Err(RustAnnError::py_err(format!(
+            return Err(RustAnnError::py_err("Dimension Error",format!(
                 "Expected dimension {}, got {}", self.dim, q.len()
             )));
         }
