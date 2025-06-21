@@ -4,6 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/rust-annie.svg)](https://pypi.org/project/rust-annie)  
 
+[![Benchmark Freshness](https://programmers-paradise.github.io/Annie/dashboard-badge.svg)](https://programmers-paradise.github.io/Annie/)
 
 A lightning-fast, Rust-powered brute-force k-NN library for Python, with optional batch queries, thread-safety, and on-disk persistence.
 
@@ -137,6 +138,12 @@ with ThreadPoolExecutor(max_workers=8) as executor:
 ## 📈 Benchmark Results
 
 Measured on a 6-core CPU:
+| Setting             | Pure Python | Rust (Annie) | Speedup |
+| ------------------- | ----------- | ------------ | ------- |
+| `N=5000, D=32, k=5` | \~0.31 ms   | \~2.16 ms    | 0.14×   |
+
+> ⚠️ NOTE: Rust may appear slower on small single-query benchmarks.
+> For larger workloads, use `.search_batch` or multi-threaded execution to unleash its full power.
 
 | Mode                             | Per-query Time |
 | -------------------------------- | -------------: |
@@ -145,6 +152,14 @@ Measured on a 6-core CPU:
 | Rust AnnIndex batch (64 queries) |      \~0.23 ms |
 
 That’s a \~4× speedup vs. NumPy!
+
+### 📊 [View Full Benchmark Dashboard →](https://programmers-paradise.github.io/Annie/)
+
+You’ll find:
+
+* Time-series plots for multiple configurations
+* Speedup trends
+* Auto-updating graphs on every push to `main`
 
 ---
 
@@ -188,6 +203,15 @@ pytest
 python benchmark.py
 python batch_benchmark.py
 ```
+
+### 📊 Benchmark Automation
+
+Benchmarks are tracked over time using:
+
+* `scripts/benchmark.py` — runs single-query performance tests
+* `dashboard.py` — generates a Plotly dashboard + freshness badge
+* GitHub Actions auto-runs and updates benchmarks on every push to `main`
+* [Live Dashboard](https://programmers-paradise.github.io/Annie/)
 
 ---
 
