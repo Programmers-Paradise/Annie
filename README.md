@@ -179,7 +179,7 @@ Same API as `AnnIndex`, safe for concurrent use.
 
 * `cargo test`
 * `pytest`
-* `benchmark.py` & `batch_benchmark.py`
+* `benchmark.py` & `batch_benchmark.py` & `compare_results.py`
 
 ```bash
 # Locally run tests & benchmarks
