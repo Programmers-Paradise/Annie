@@ -1,11 +1,13 @@
 // src/index.rs
 
+
 use pyo3::prelude::*;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2, IntoPyArray};
 use ndarray::Array2;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 
+use crate::backend::AnnBackend;  //new added
 use crate::storage::{save_index, load_index};
 use crate::metrics::Distance;
 use crate::errors::RustAnnError;
@@ -221,5 +223,75 @@ impl AnnIndex {
         let ids   = results.iter().map(|(i, _)| *i).collect();
         let dists = results.iter().map(|(_, d)| *d).collect();
         Ok((ids, dists))
+        
+
+        
+    }
+}
+impl AnnBackend for AnnIndex {
+    fn new(dim: usize, metric: Distance) -> Self {
+        AnnIndex {
+            dim,
+            metric,
+            minkowski_p: None,
+            entries: Vec::new(),
+        }
+    }
+
+    fn add_item(&mut self, item: Vec<f32>) {
+        let id = self.entries.len() as i64;
+        let sq_norm = item.iter().map(|x| x * x).sum::<f32>();
+        self.entries.push((id, item, sq_norm));
+    }
+
+    fn build(&mut self) {
+        // No-op for brute-force index
+    }
+
+    fn search(&self, vector: &[f32], k: usize) -> Vec<usize> {
+        let query_sq = vector.iter().map(|x| x * x).sum::<f32>();
+
+        let mut results: Vec<(usize, f32)> = self.entries
+            .iter()
+            .enumerate()
+            .map(|(idx, (_id, vec, vec_sq))| {
+                let dot = vec.iter().zip(vector.iter()).map(|(x, y)| x * y).sum::<f32>();
+
+                let dist = if let Some(p) = self.minkowski_p {
+                    vec.iter().zip(vector.iter())
+                        .map(|(x, y)| (x - y).abs().powf(p))
+                        .sum::<f32>()
+                        .powf(1.0 / p)
+                } else {
+                    match self.metric {
+                        Distance::Euclidean => ((vec_sq + query_sq - 2.0 * dot).max(0.0)).sqrt(),
+                        Distance::Cosine => {
+                            let denom = vec_sq.sqrt().max(1e-12) * query_sq.sqrt().max(1e-12);
+                            (1.0 - (dot / denom)).max(0.0)
+                        }
+                        Distance::Manhattan => vec.iter().zip(vector.iter())
+                            .map(|(x, y)| (x - y).abs())
+                            .sum::<f32>(),
+                        Distance::Chebyshev => vec.iter().zip(vector.iter())
+                            .map(|(x, y)| (x - y).abs())
+                            .fold(0.0, f32::max),
+                    }
+                };
+
+                (idx, dist)
+            })
+            .collect();
+
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        results.truncate(k);
+        results.into_iter().map(|(i, _)| i).collect()
+    }
+
+    fn save(&self, path: &str) {
+        let _ = save_index(self, path);
+    }
+
+    fn load(path: &str) -> Self {
+        load_index(path).unwrap()
     }
 }

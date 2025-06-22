@@ -134,6 +134,55 @@ with ThreadPoolExecutor(max_workers=8) as executor:
 
 ---
 
+## Build and Query a Brute-Force AnnIndex in Python (Complete Example)
+
+This section demonstrates a complete, beginner-friendly example of how to build and query a `brute-force AnnIndex` using Python.
+
+> A brute-force AnnIndex exhaustively compares the query vector with every vector in the dataset. Though it checks all vectors, it's **extremely fast** thanks to its underlying **Rust + SIMD** implementation.
+
+---
+
+## Steps
+
+- Initialize a `brute-force AnnIndex` with 128 dimensions and cosine distance.
+- Generate and add a batch of random vectors with unique IDs.
+- Perform a top-5 nearest-neighbor search on a new query vector.
+- Print the IDs and distances of the closest matches.
+
+
+---
+
+### 💻 Code Example
+
+> Make sure you’ve installed the library first:
+
+```bash
+pip install rust-annie  # if not installed already
+```
+
+```python
+import numpy as np
+from rust_annie import AnnIndex, Distance
+
+index = AnnIndex(dim=128, metric=Distance.COSINE)
+
+vectors = np.random.rand(1000, 128).astype(np.float32)
+
+ids = np.arange(1000, dtype=np.int64)
+
+index.add(vectors, ids)
+
+query = np.random.rand(128).astype(np.float32)
+
+top_ids, distances = index.search(query, k=5)
+
+print("Top 5 nearest neighbors:")
+
+for i in range(5):
+    print(f"ID: {top_ids[i]}, Distance: {distances[i]}")
+```
+
+
 ## 📈 Benchmark Results
 
 Measured on a 6-core CPU:

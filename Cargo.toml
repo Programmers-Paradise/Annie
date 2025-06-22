@@ -1,6 +1,6 @@
 [package]
 name = "rust_annie"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
@@ -8,13 +8,16 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # PyO3 for Python bindings
-pyo3 = { version = "0.18.3", features = ["extension-module"] }
+pyo3 = { version = "0.18.3", features = ["extension-module"] }   
+hnsw_rs = "0.3.2"
+
 
 # Rust–NumPy interoperability
 numpy = "0.18.0"
 
 # ndarray for constructing 2D arrays
-ndarray = "0.15"
+ndarray = "0.15.4"
+
 
 # Serialization
 serde = { version = "1.0.188", features = ["derive"] }
