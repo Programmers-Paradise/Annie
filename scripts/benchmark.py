@@ -2,6 +2,8 @@
 import time,json,argparse
 import numpy as np
 from rust_annie import AnnIndex, Distance
+import os
+from datetime import datetime
 
 def pure_python_search(data, ids, q, k):
     # data: (N,D), q: (D,)

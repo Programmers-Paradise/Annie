@@ -1,0 +1,73 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - 'src/**'
+      - 'Cargo.*'
+      - 'pyproject.toml'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'src/**'
+      - 'Cargo.*'
+      - 'pyproject.toml'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Set up virtual environment
+      run: |
+        python -m venv .venv
+        echo "source .venv/bin/activate" >> $GITHUB_ENV
+
+    - name: Install Python dependencies
+      run: |
+       pip install maturin
+       pip install numpy pandas plotly jinja2
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build rust_annie
+      run: |
+        source .venv/bin/activate
+        maturin develop
+
+    - name: Run benchmark
+      run: |
+        source .venv/bin/activate
+        python scripts/benchmark.py --output benchmarks/latest.json
+
+    - name: Generate dashboard + badge
+      run: |
+        source .venv/bin/activate
+        python dashboard.py
+
+    - name: Commit and push dashboard updates
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+        git add -f benchmarks/*.json docs/index.html docs/dashboard-badge.svg
+        git commit -m "chore: update benchmark dashboard [skip ci]" || echo "No changes to commit"
+        
+        # Determine the branch to push to
+        BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+        
+        if [ -n "$BRANCH" ]; then
+          git checkout "$BRANCH"
+          git push origin "$BRANCH"
+       else
+          echo "Not on a branch — skipping push."
+       fi

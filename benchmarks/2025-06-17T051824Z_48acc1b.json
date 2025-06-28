@@ -1,0 +1,10 @@
+{
+  "N": 10000,
+  "D": 64,
+  "k": 10,
+  "repeats": 10,
+  "rust_avg_ms": 4.5644,
+  "python_avg_ms": 0.68,
+  "speedup": 0.149,
+  "timestamp": 1750137504.755628
+}

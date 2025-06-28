@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # PyO3 for Python bindings

@@ -1,13 +1,14 @@
 
-mod index;
+pub mod index;
 mod storage;
-mod metrics;
+pub mod metrics;
 mod errors;
 mod concurrency;
 
 mod backend;
 mod hnsw_index;
 mod index_enum;
+mod filters; 
 
 use pyo3::prelude::*;
 use crate::backend::AnnBackend;
@@ -15,6 +16,7 @@ use crate::index::AnnIndex;
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
+use crate::filters::PythonFilter;
 
 #[pyclass]
 pub struct PyHnswIndex {
