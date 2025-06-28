@@ -16,7 +16,7 @@ hnsw_rs = "0.3.2"
 numpy = "0.18.0"
 
 # ndarray for constructing 2D arrays
-ndarray = "0.15.4"
+ndarray = "0.16.1"
 
 
 # Serialization
