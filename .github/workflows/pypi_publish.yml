@@ -1,0 +1,170 @@
+name: CI/CD Pipeline for PyPI Publishing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      publish_to_testpypi:
+        description: 'Publish to TestPyPI'
+        required: false
+        default: false
+        type: boolean
+      publish_to_pypi:
+        description: 'Publish to PyPI (production)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: rustfmt, clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run tests
+      run: cargo test --verbose
+
+    - name: Run clippy
+      run: cargo clippy -- -D warnings
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+  build-wheels:
+    name: Build wheels
+    runs-on: ${{ matrix.os }}
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && (inputs.publish_to_testpypi || inputs.publish_to_pypi)
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install maturin
+      run: pip install maturin
+
+    - name: Build wheels
+      run: maturin build --release --out dist --find-interpreter
+
+    - name: Upload wheels
+      uses: actions/upload-artifact@v3
+      with:
+        name: wheels-${{ matrix.os }}
+        path: dist
+
+  build-sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && (inputs.publish_to_testpypi || inputs.publish_to_pypi)
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.8'
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Install maturin
+      run: pip install maturin
+
+    - name: Build sdist
+      run: maturin sdist --out dist
+
+    - name: Upload sdist
+      uses: actions/upload-artifact@v3
+      with:
+        name: sdist
+        path: dist
+
+  publish-to-testpypi:
+    name: Publish to TestPyPI
+    runs-on: ubuntu-latest
+    needs: [build-wheels, build-sdist]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_testpypi
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: dist
+
+    - name: Flatten dist directory
+      run: |
+        find dist -name "*.whl" -o -name "*.tar.gz" | xargs -I {} mv {} dist/
+        find dist -type d -empty -delete
+
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        verbose: true
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build-wheels, build-sdist]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_to_pypi
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+      with:
+        path: dist
+
+    - name: Flatten dist directory
+      run: |
+        find dist -name "*.whl" -o -name "*.tar.gz" | xargs -I {} mv {} dist/
+        find dist -type d -empty -delete
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        verbose: true
