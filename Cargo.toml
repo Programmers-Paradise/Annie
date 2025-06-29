@@ -21,6 +21,6 @@ ndarray = "0.15.4"
 
 # Serialization
 serde = { version = "1.0.188", features = ["derive"] }
-bincode = "1.3.3"
+bincode = "2.0.1"
 
 rayon = "1.7"
