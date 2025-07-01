@@ -18,6 +18,10 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
   CARGO_TERM_COLOR: always
 
