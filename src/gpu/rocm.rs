@@ -34,8 +34,13 @@ impl super::GpuBackend for RocmBackend {
         ];
 
         // Launch kernel
-        let grid_size = n_queries as u32;
-        let block_size = n_vectors as u32;
+        // Query the maximum threads per block for the device
+        let max_threads_per_block = hip::Device::current()?.get_attribute(hip::DeviceAttribute::MaxThreadsPerBlock)? as u32;
+        
+        // Cap block_size to the device limit and adjust grid_size accordingly
+        let block_size = std::cmp::min(n_vectors as u32, max_threads_per_block);
+        let grid_size = ((n_vectors as u32 + block_size - 1) / block_size) * n_queries as u32;
+        
         let stream = Stream::new(hip::StreamFlags::NON_BLOCKING, None)?;
         
         unsafe {
