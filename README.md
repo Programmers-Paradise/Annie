@@ -23,9 +23,8 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 6. [API Reference](#api-reference)  
 7. [Development & CI](#development--ci)  
 8. [GPU Acceleration](#gpu-acceleration)
-9. [Documentation](#documentation)
-10. [Contributing](#contributing)  
-11. [License](#license)
+9. [Contributing](#contributing)  
+10. [License](#license)
 
 ## Features
 
