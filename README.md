@@ -238,7 +238,7 @@ Measured on a 6-core CPU:
 
 | Mode                             | Per-query Time |
 | -------------------------------- | -------------: |
-| Pure-Python (NumPy - 𝑙2)        |       \~2.8 ms |
+| Pure-Python (NumPy - 𝑙2)         |      \~2.8 ms |
 | Rust AnnIndex single query       |       \~0.7 ms |
 | Rust AnnIndex batch (64 queries) |      \~0.23 ms |
 
@@ -246,9 +246,9 @@ That’s a \~4× speedup vs. NumPy!
 
 | Operation	           | Dataset Size  | Time (ms) | Speedup vs Python | 
 | -------------------- | ------------- | --------- | ----------------- | 
-| Single Query (Brute) | 10,000 × 64   | 0.7	   | 4×                | 
-| Batch Query (64)	   | 10,000 × 64   | 0.23	   | 12×               | 
-| HNSW Query	       | 100,000 × 128 | 0.05	   | 56×               |
+| Single Query (Brute) | 10,000 × 64   | 0.7	      | 4×                | 
+| Batch Query (64)	   | 10,000 × 64  | 0.23	   | 12×               | 
+| HNSW Query	       | 100,000 × 128  | 0.05	   | 56×               |
 
 ##### [View Full Benchmark Dashboard →](https://programmers-paradise.github.io/Annie/)
 
@@ -286,7 +286,7 @@ Same API as `AnnIndex`, safe for concurrent use.
 | Class              | Description                                |
 | ------------------ | ------------------------------------------ |
 | AnnIndex	         | Brute-force exact search                   |
-| PyHnswIndex	     | Approximate HNSW index                     |
+| PyHnswIndex	      | Approximate HNSW index                     |
 | ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex          |
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc) |
 
@@ -294,8 +294,8 @@ Same API as `AnnIndex`, safe for concurrent use.
 
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
-| add(data, ids)	                    | Add vectors to index                       | 
-| search(query, k)	                    | Single query search                        | 
+| add(data, ids)	                      | Add vectors to index                       | 
+| search(query, k)	                   | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
 | save(path)                            | Save index to disk                         | 
