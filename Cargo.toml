@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 # PyO3 for Python bindings
 pyo3 = { version = "0.18.3", features = ["extension-module"] }   
 hnsw_rs = "0.3.2"
-home = "0.5.10"
+# Removed the unused `home` dependency
 
 # Rust–NumPy interoperability
 numpy = "0.18.0"
