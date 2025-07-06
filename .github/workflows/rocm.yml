@@ -1,0 +1,25 @@
+  rocm:
+    name: ROCm Backend Tests
+    runs-on: ubuntu-latest
+    container:
+      image: rocm/dev-ubuntu-20.04:latest
+      options: --device=/dev/kfd --device=/dev/dri --group-add video
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          apt-get update
+          apt-get install -y build-essential pkg-config libclang-dev
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build with ROCm support
+        run: cargo build --features rocm
+
+      - name: Run tests with ROCm
+        run: cargo test --features rocm
