@@ -1,8 +1,8 @@
-#[cfg(feature = "gpu")]
+#[cfg(any(feature = "cuda", feature = "rocm"))]
 use annie::gpu::gpu::l2_distance_gpu;
 
 fn main() {
-    #[cfg(feature = "gpu")]
+    #[cfg(any(feature = "cuda", feature = "rocm"))]
     {
         let dim = 3;
         let n_queries = 2;
@@ -20,6 +20,6 @@ fn main() {
         println!("GPU L2 distances: {:?}", distances);
     }
 
-    #[cfg(not(feature = "gpu"))]
-    println!("Run with --features gpu to enable GPU support.");
+    #[cfg(not(any(feature = "cuda", feature = "rocm")))]
+    println!("Run with --features cuda or --features rocm to enable GPU support.");
 }

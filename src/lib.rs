@@ -63,6 +63,10 @@ pub mod hnsw_index;
 mod index_enum;
 mod filters;
 
+// Add GPU module
+#[cfg(any(feature = "cuda", feature = "rocm"))]
+pub mod gpu;
+
 use pyo3::prelude::*;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 use crate::backend::AnnBackend;

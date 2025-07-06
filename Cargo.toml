@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 # PyO3 for Python bindings
 pyo3 = { version = "0.18.3", features = ["extension-module"] }   
 hnsw_rs = "0.3.2"
-
+home = "0.5.10"
 
 # Rust–NumPy interoperability
 numpy = "0.18.0"
@@ -18,9 +18,16 @@ numpy = "0.18.0"
 # ndarray for constructing 2D arrays
 ndarray = "0.15.4"
 
-
 # Serialization
 serde = { version = "1.0.188", features = ["derive"] }
 bincode = "1.3.3"
 
 rayon = "1.7"
+
+# GPU backends (optional)
+cust = { version = "0.3", optional = true }
+hip-rs = { version = "0.1", optional = true }  # Changed to hip-rs
+
+[features]
+cuda = ["cust"]
+rocm = ["hip-rs"]  # Feature points to hip-rs
