@@ -105,7 +105,7 @@ neighbor_ids, distances = index.search(query, k=5)
 # Stable release from PyPI:
 pip install rust-annie
 
-# Install with GPU support (requires CUDA):
+# Install with GPU support (requires CUDA or ROCm):
 pip install rust-annie[gpu]
 
 # Or install from source:
@@ -339,7 +339,7 @@ Benchmarks are tracked over time using:
 
 ### Enable GPU in Rust
 
-Enable CUDA support for brute-force calculations:
+Enable CUDA or ROCm support for brute-force calculations:
 ```bash
 # Install with GPU support
 pip install rust-annie[gpu]
@@ -353,8 +353,8 @@ Supported operations:
   - High-dimensional similarity search
 
 Requirements:
-  - NVIDIA GPU with CUDA support
-  - CUDA Toolkit installed
+  - NVIDIA GPU with CUDA support or AMD GPU with ROCm support
+  - CUDA Toolkit or ROCm installed
 
 ## Contributing
 
