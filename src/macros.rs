@@ -92,11 +92,12 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 self.inner.search(&vector, k)
             }
 
-            fn save(&self, path: String) {
+            fn save(&self, path: String) -> PyResult<()> {
                 if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    panic!("Invalid file path");
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
                 }
                 self.inner.save(&path);
+                Ok(())
             }
             #[staticmethod]
             fn load(path: String) -> PyResult<Self> {
