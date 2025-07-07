@@ -148,22 +148,22 @@ impl AnnIndex {
     /// Returns:
     ///     Tuple[ndarray, ndarray]: Filtered (neighbor IDs, distances)
     pub fn search_batch(
-        &self,
-        py: Python,
-        data: PyReadonlyArray2<f32>,
-        k: usize,
-    ) -> PyResult<(PyObject, PyObject)> {
-        let arr = data.as_array();
-        let n = arr.nrows();
-
-      let arr = data.as_array();
+    &self,
+    py: Python,
+    data: PyReadonlyArray2<f32>,
+    k: usize,
+) -> PyResult<(PyObject, PyObject)> {
+    let arr = data.as_array();
     let n = arr.nrows();
+
     if arr.ncols() != self.dim {
         return Err(RustAnnError::py_err(
             "Dimension Error",
             format!("Expected query shape (N, {}), got (N, {})", self.dim, arr.ncols())
         ));
     }
+
+    // Parallel computation with error propagation
     let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
         (0..n)
             .into_par_iter()
@@ -175,7 +175,6 @@ impl AnnIndex {
             })
             .collect()
     });
-    
 
     let (all_ids, all_dists): (Vec<_>, Vec<_>) = results?.into_iter().unzip();
 
@@ -184,25 +183,11 @@ impl AnnIndex {
     let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists.concat())
         .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
 
-        // Flatten the results
-        let mut all_ids = Vec::with_capacity(n * k);
-        let mut all_dists = Vec::with_capacity(n * k);
-        for (ids, dists) in results {
-            all_ids.extend(ids);
-            all_dists.extend(dists);
-        }
-
-        // Build (n × k) ndarrays
-        let ids_arr: Array2<i64> = Array2::from_shape_vec((n, k), all_ids)
-            .map_err(|e| RustAnnError::py_err("Reshape Error",format!("Reshape ids failed: {}", e)))?;
-        let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists)
-            .map_err(|e| RustAnnError::py_err("Reshape Error",format!("Reshape dists failed: {}", e)))?;
-
-        Ok((
-            ids_arr.into_pyarray(py).to_object(py),
-            dists_arr.into_pyarray(py).to_object(py),
-        ))
-    }
+    Ok((
+        ids_arr.into_pyarray(py).to_object(py),
+        dists_arr.into_pyarray(py).to_object(py),
+    ))
+}
 
     /// Save index to `<path>.bin`.
     pub fn save(&self, path: &str) -> PyResult<()> {
@@ -251,7 +236,6 @@ impl AnnIndex {
     Ok((ids, dists))
     }
 }
-
 impl AnnBackend for AnnIndex {
     fn new(dim: usize, metric: Distance) -> Self {
         AnnIndex {
