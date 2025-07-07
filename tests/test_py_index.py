@@ -37,7 +37,7 @@ def test_hnsw_index_add_search():
     assert isinstance(dists, np.ndarray)
     assert ids.shape == (1,)
     assert dists.shape == (1,)
-    assert dists[0] == pytest.approx(0.0)  # distances are mocked as 0.0 for HNSW currently
+    assert dists[0] == 0.0  # distances are mocked as 0.0 for HNSW currently
 
 def test_invalid_backend():
     with pytest.raises(ValueError) as excinfo:
