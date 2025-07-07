@@ -28,14 +28,12 @@ impl PyIndex {
         Ok(Self { index })
     }
 
-    fn add_item(&mut self, item: Vec<f32>) -> PyResult<()> {
-        self.index.add_item(item)?;
-        Ok(())
+    fn add_item(&mut self, item: Vec<f32>) {
+        self.index.add_item(item);
     }
 
-    fn build(&mut self) -> PyResult<()> {
-        self.index.build()?;
-        Ok(())
+    fn build(&mut self) {
+        self.index.build();
     }
 
     fn search(
