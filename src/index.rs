@@ -157,18 +157,21 @@ impl AnnIndex {
         let n = arr.nrows();
 
         // Release the GIL around the parallel batch:
-        let results: Vec<(Vec<i64>, Vec<f32>)> = py.allow_threads(|| {
+        let results: Result<Vec<(Vec<i64>, Vec<f32>)>, RustAnnError> = py.allow_threads(|| {
             (0..n)
                 .into_par_iter()
                 .map(|i| {
                     let row = arr.row(i);
                     let q: Vec<f32> = row.to_vec();
                     let q_sq = q.iter().map(|x| x * x).sum::<f32>();
-                    // safe unwrap: dims validated
-                    self.inner_search(&q, q_sq, k).unwrap()
+                    self.inner_search(&q, q_sq, k).map_err(|e| {
+                        RustAnnError::py_err("SearchBatch Error", format!("Row {} failed: {}", i, e))
+                    })
                 })
-                .collect::<Vec<_>>()
+                .collect()
         });
+
+        let results = results?;
 
         // Flatten the results
         let mut all_ids = Vec::with_capacity(n * k);
