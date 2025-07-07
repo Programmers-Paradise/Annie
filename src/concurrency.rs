@@ -69,9 +69,10 @@ impl ThreadSafeAnnIndex {
     pub fn search_batch(&self, py: Python, data: PyReadonlyArray2<f32>, k: usize)
         -> PyResult<(PyObject, PyObject)>
     {
-        let guard = self.inner.read().map_err(|_| {
-                RustAnnError::py_err("Lock Error", "Failed to acquire read lock for search_batch")
-        })?;
+let guard = self.inner.read().map_err(|e| {
+        eprintln!("RwLock poisoned in search_batch: {:?}", e);
+        RustAnnError::py_err("Lock Error", "Failed to acquire read lock for search_batch")
+})?;
 
         guard.search_batch(py, data, k)
     }
