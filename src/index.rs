@@ -184,10 +184,7 @@ impl AnnIndex {
     let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists.concat())
         .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
 
-    Ok((
-        ids_arr.into_pyarray(py).to_object(py),
-        dists_arr.into_pyarray(py).to_object(py),
-    ))
+    Ok
     }
 
         // Flatten the results
