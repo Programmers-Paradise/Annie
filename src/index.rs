@@ -155,41 +155,43 @@ impl AnnIndex {
     ) -> PyResult<(PyObject, PyObject)> {
         let arr = data.as_array();
         let n = arr.nrows();
-
-        // Release the GIL around the parallel batch:
-        let results: Vec<(Vec<i64>, Vec<f32>)> = py.allow_threads(|| {
-            (0..n)
-                .into_par_iter()
-                .map(|i| {
-                    let row = arr.row(i);
-                    let q: Vec<f32> = row.to_vec();
-                    let q_sq = q.iter().map(|x| x * x).sum::<f32>();
-                    // safe unwrap: dims validated
-                    self.inner_search(&q, q_sq, k).unwrap()
-                })
-                .collect::<Vec<_>>()
-        });
-
-        // Flatten the results
-        let mut all_ids = Vec::with_capacity(n * k);
-        let mut all_dists = Vec::with_capacity(n * k);
-        for (ids, dists) in results {
-            all_ids.extend(ids);
-            all_dists.extend(dists);
+        
+        if arr.ncols() != self.dim {
+            return Err(RustAnnError::py_err(
+                "Dimension Error",
+                format!("Expected query shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
-
-        // Build (n × k) ndarrays
-        let ids_arr: Array2<i64> = Array2::from_shape_vec((n, k), all_ids)
-            .map_err(|e| RustAnnError::py_err("Reshape Error",format!("Reshape ids failed: {}", e)))?;
-        let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists)
-            .map_err(|e| RustAnnError::py_err("Reshape Error",format!("Reshape dists failed: {}", e)))?;
-
+        
+        // Use allow_threads with parallel iterator and propagate errors as PyResult
+        let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
+            (0..n)
+            .into_par_iter()
+            .map(|i| {
+                let row = arr.row(i);
+                let q: Vec<f32> = row.to_vec();
+                let q_sq = q.iter().map(|x| x * x).sum::<f32>();
+                self.inner_search(&q, q_sq, k)
+                   .map_err(|e| RustAnnError::io_err(format!("Parallel search failed: {}", e)))
+            })
+            .collect()
+        });
+        
+        // Convert RustAnnError into PyErr before returning
+        let results = results.map_err(|e| e.into_pyerr())?;
+        
+        let (all_ids, all_dists): (Vec<_>, Vec<_>) = results.into_iter().unzip();
+        
+        let ids_arr: Array2<i64> = Array2::from_shape_vec((n, k), all_ids.concat())
+            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape ids failed: {}", e)))?;
+        let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists.concat())
+            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
+        
         Ok((
             ids_arr.into_pyarray(py).to_object(py),
             dists_arr.into_pyarray(py).to_object(py),
         ))
     }
-
+    
     /// Save index to `<path>.bin`.
     pub fn save(&self, path: &str) -> PyResult<()> {
         let full = format!("{}.bin", path);
