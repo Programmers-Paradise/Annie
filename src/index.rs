@@ -173,7 +173,7 @@ impl AnnIndex {
                 let q_sq = q.iter().map(|x| x * x).sum::<f32>();
                 self.inner_search(&q, q_sq, k)
             })
-            .try_collect()
+            .collect()
     });
     
 
