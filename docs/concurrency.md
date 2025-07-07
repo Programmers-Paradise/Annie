@@ -8,7 +8,7 @@ Annie exposes a thread-safe version of its ANN index (`AnnIndex`) for use in Pyt
 - Exclusive write access (`add`, `remove`)
 - Backed by Rust `RwLock` and exposed via PyO3
 - `PyHnswIndex` supports mapping internal IDs to user IDs and handling vector data efficiently
-- Enhanced error handling for read lock acquisition
+- Enhanced error handling for read and write lock acquisition
 
 ## Example
 
@@ -209,19 +209,19 @@ Creates a new thread-safe index.
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
-Thread-safe vector addition.
+Thread-safe vector addition with enhanced error handling for lock acquisition.
 
 ### `remove(ids: List[int])`
-Thread-safe removal by IDs.
+Thread-safe removal by IDs with enhanced error handling for lock acquisition.
 
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe single query search.
+Thread-safe single query search with enhanced error handling for lock acquisition.
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe batch search with enhanced error handling for lock acquisition.
+Thread-safe batch search with enhanced error handling for lock acquisition and parallel search errors.
 
 ### `save(path: str)`
-Thread-safe save.
+Thread-safe save with enhanced error handling for lock acquisition.
 
 ### `static load(path: str) -> ThreadSafeAnnIndex`
 Thread-safe load.
