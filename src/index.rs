@@ -165,7 +165,7 @@ impl AnnIndex {
                     let q: Vec<f32> = row.to_vec();
                     let q_sq = q.iter().map(|x| x * x).sum::<f32>();
                     self.inner_search(&q, q_sq, k).map_err(|e| {
-                        RustAnnError::py_err("SearchBatch Error", format!("Row {} failed: {}", i, e))
+                        RustAnnError::py_err("SearchBatch Error", format!("Row {} failed: {:#?}", i, e))
                     })
                 })
                 .collect()
