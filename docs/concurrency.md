@@ -8,6 +8,7 @@ Annie exposes a thread-safe version of its ANN index (`AnnIndex`) for use in Pyt
 - Exclusive write access (`add`, `remove`)
 - Backed by Rust `RwLock` and exposed via PyO3
 - `PyHnswIndex` supports mapping internal IDs to user IDs and handling vector data efficiently
+- Enhanced error handling for read lock acquisition
 
 ## Example
 
@@ -110,6 +111,7 @@ Batch search for multiple queries.
 - `queries`: M×dim array of queries
 - `k`: Number of neighbors per query
 - Returns: (M×k IDs, M×k distances)
+- Note: Enhanced error handling for dimension mismatches
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
 Search with ID filtering.
@@ -219,7 +221,7 @@ Thread-safe removal by IDs.
 Thread-safe single query search.
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe batch search.
+Thread-safe batch search with enhanced error handling for lock acquisition.
 
 ### `save(path: str)`
 Thread-safe save.
