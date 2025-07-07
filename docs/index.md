@@ -84,6 +84,22 @@ query = np.random.rand(128).astype(np.float32)
 neighbor_ids, _ = index.search(query, k=10)
 ```
 
+### Index (Unified Index Class)
+```python
+from rust_annie import Index, Distance
+import numpy as np
+
+# Create index with backend = "brute" or "hnsw"
+index = Index("brute", dim=128, metric=Distance.EUCLIDEAN)
+
+# Add items one by one
+index.add_item(np.random.rand(128).astype(np.float32))
+
+# Search
+query = np.random.rand(128).astype(np.float32)
+ids, dists = index.search(query, k=5)
+```
+
 ## Examples
 
 ### Brute-Force Index
@@ -201,12 +217,13 @@ You’ll find:
 
 ### Core Classes
 
-| Class              | Description                                |
-| ------------------ | ------------------------------------------ |
-| AnnIndex	         | Brute-force exact search                   |
-| PyHnswIndex	     | Approximate HNSW index                     |
-| ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex          |
-| Distance           | 	Distance metrics (Euclidean, Cosine, etc) |
+| Class              | Description                                 |
+| ------------------ | --------------------------------------------|
+| AnnIndex	         | Brute-force exact search                    |
+| PyHnswIndex	       | Approximate HNSW index                      |
+| ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex           |
+| Distance           | 	Distance metrics (Euclidean, Cosine, etc)  |
+| Index              | Unified wrapper over AnnIndex and PyHnswIndex|
 
 ### Utility Module
 
@@ -218,7 +235,7 @@ You’ll find:
 
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
-| add(data, ids)	                    | Add vectors to index                       | 
+| add(data, ids)	                      | Add vectors to index                       | 
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
