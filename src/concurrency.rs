@@ -45,9 +45,7 @@ impl ThreadSafeAnnIndex {
         data: PyReadonlyArray2<f32>,
         ids: PyReadonlyArray1<i64>,
     ) -> PyResult<()> {
-        let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
-        })?;
+        let mut guard = self.acquire_write()?;
         guard.add(py, data, ids)
     }
 
