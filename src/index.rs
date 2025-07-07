@@ -175,7 +175,7 @@ impl AnnIndex {
             })
             .try_collect()
     });
-    });
+    
 
     let (all_ids, all_dists): (Vec<_>, Vec<_>) = results?.into_iter().unzip();
 
@@ -183,9 +183,6 @@ impl AnnIndex {
         .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape ids failed: {}", e)))?;
     let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists.concat())
         .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
-
-    Ok
-    }
 
         // Flatten the results
         let mut all_ids = Vec::with_capacity(n * k);
