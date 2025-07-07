@@ -154,20 +154,17 @@ The `PyHnswIndex` class provides approximate nearest neighbor search using Hiera
 
 ### `PyHnswIndex(dims: int)`
 Creates a new HNSW index.
-
 - `dims` (int): Vector dimension
 
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
 Add vectors to the index.
-
 - `data`: N×dims array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
 
 ### `search(vector: ndarray, k: int) -> Tuple[ndarray, ndarray]`
 Search for k approximate nearest neighbors.
-
 - `vector`: dims-dimensional query vector
 - `k`: Number of neighbors to return
 - Returns: (neighbor IDs, distances)
@@ -418,12 +415,12 @@ print("Filtered search results:", results)
 
 This library supports applying filters to narrow down ANN search results dynamically.
 
-| Filter type       | Example                              |
-|-------------------|--------------------------------------|
-| **Equals**        | `Filter.equals("category", "A")`     |
-| **Greater than**  | `Filter.gt("score", 0.8)`            |
-| **Less than**     | `Filter.lt("price", 100)`            |
-| **Custom predicate** | `Filter.custom(lambda metadata: ...)` |
+| Filter type         | Example                              |
+|-------------------  |--------------------------------------|
+| **Equals**          | `Filter.equals("category", "A")`     |
+| **Greater than**    | `Filter.gt("score", 0.8)`            |
+| **Less than**       | `Filter.lt("price", 100)`            |
+| **Custom predicate**| `Filter.custom(lambda metadata: ...)`|
 
 Filters work on the metadata you provide when adding items to the index.
 
