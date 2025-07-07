@@ -74,8 +74,12 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                     ));
                 }
 
-                for (i, vector) in data_slice.chunks_exact(dims).enumerate() {
-                    self.inner.insert(vector, ids_slice[i]);
+                if let Some(batch_insert) = self.inner.batch_insert {
+                    batch_insert(data_slice, ids_slice, dims);
+                } else {
+                    for (i, vector) in data_slice.chunks_exact(dims).enumerate() {
+                        self.inner.insert(vector, ids_slice[i]);
+                    }
                 }
                 Ok(())
             }
@@ -84,16 +88,21 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 self.inner.build();
             }
 
-            fn search(&self, vector: Vec<f32>, k: usize) -> Vec<usize> {
+            fn search(&self, vector: Vec<f32>, k: usize) -> Vec<i64> {
                 self.inner.search(&vector, k)
             }
 
             fn save(&self, path: String) {
+                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
+                    panic!("Invalid file path");
+                }
                 self.inner.save(&path);
             }
-
             #[staticmethod]
             fn load(path: String) -> PyResult<Self> {
+                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
+                }
                 match #name::load(&path) {
                     Ok(inner) => Ok(Py#name { inner }),
                     Err(e) => Err(PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string())),
