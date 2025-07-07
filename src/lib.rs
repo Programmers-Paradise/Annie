@@ -57,7 +57,7 @@ mod storage;
 pub mod metrics;
 mod errors;
 mod concurrency;
-
+mod macros;
 mod backend;
 pub mod hnsw_index;
 mod index_enum;

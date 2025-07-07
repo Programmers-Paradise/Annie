@@ -4,9 +4,11 @@ use crate::metrics::Distance;
 
 /// HNSW backend implementation.
 /// For now, only supports Euclidean (L2) distance.
+#[py_annindex(backend = "HNSW", distance = "Euclidean")]
 pub struct HnswIndex {
     index: Hnsw<'static, f32, DistL2>,
     dims: usize,
+    user_ids: Vec<i64>,
 }
 
 impl HnswIndex {
