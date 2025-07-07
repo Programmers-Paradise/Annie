@@ -8,6 +8,7 @@ Annie exposes a thread-safe version of its ANN index (`AnnIndex`) for use in Pyt
 - Exclusive write access (`add`, `remove`)
 - Backed by Rust `RwLock` and exposed via PyO3
 - `PyHnswIndex` supports mapping internal IDs to user IDs and handling vector data efficiently
+- Enhanced error handling for read lock acquisition
 
 ## Example
 
@@ -110,6 +111,7 @@ Batch search for multiple queries.
 - `queries`: M×dim array of queries
 - `k`: Number of neighbors per query
 - Returns: (M×k IDs, M×k distances)
+- Note: Enhanced error handling for dimension mismatches
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
 Search with ID filtering.
@@ -152,20 +154,17 @@ The `PyHnswIndex` class provides approximate nearest neighbor search using Hiera
 
 ### `PyHnswIndex(dims: int)`
 Creates a new HNSW index.
-
 - `dims` (int): Vector dimension
 
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
 Add vectors to the index.
-
 - `data`: N×dims array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
 
 ### `search(vector: ndarray, k: int) -> Tuple[ndarray, ndarray]`
 Search for k approximate nearest neighbors.
-
 - `vector`: dims-dimensional query vector
 - `k`: Number of neighbors to return
 - Returns: (neighbor IDs, distances)
@@ -219,7 +218,7 @@ Thread-safe removal by IDs.
 Thread-safe single query search.
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe batch search.
+Thread-safe batch search with enhanced error handling for lock acquisition.
 
 ### `save(path: str)`
 Thread-safe save.
@@ -416,12 +415,12 @@ print("Filtered search results:", results)
 
 This library supports applying filters to narrow down ANN search results dynamically.
 
-| Filter type       | Example                              |
-|-------------------|--------------------------------------|
-| **Equals**        | `Filter.equals("category", "A")`     |
-| **Greater than**  | `Filter.gt("score", 0.8)`            |
-| **Less than**     | `Filter.lt("price", 100)`            |
-| **Custom predicate** | `Filter.custom(lambda metadata: ...)` |
+| Filter type         | Example                              |
+|-------------------  |--------------------------------------|
+| **Equals**          | `Filter.equals("category", "A")`     |
+| **Greater than**    | `Filter.gt("score", 0.8)`            |
+| **Less than**       | `Filter.lt("price", 100)`            |
+| **Custom predicate**| `Filter.custom(lambda metadata: ...)`|
 
 Filters work on the metadata you provide when adding items to the index.
 

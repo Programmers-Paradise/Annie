@@ -37,6 +37,9 @@ Batch search for multiple queries.
 - `queries`: M×dim array of queries
 - `k`: Number of neighbors per query
 - Returns: (M×k IDs, M×k distances)
+- Errors: 
+  - `Lock Error`: Failed to acquire read lock for `search_batch`.
+  - `SearchBatch Error`: Indicates a failure during the batch search process, with specific row information.
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
 Search with ID filtering.

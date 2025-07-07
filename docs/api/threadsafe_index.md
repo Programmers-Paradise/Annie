@@ -22,7 +22,7 @@ Thread-safe removal by IDs.
 Thread-safe single query search.
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe batch search.
+Thread-safe batch search. This method now includes enhanced error handling for read locks. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock for search_batch".
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
 Thread-safe filtered search using a custom Python callback function.
