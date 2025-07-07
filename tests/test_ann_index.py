@@ -24,7 +24,7 @@ def test_search_batch_invalid_dimension_should_fail():
 
     bad_query = np.array([[1.0, 2.0]], dtype=np.float32)  # dim = 2, should trigger failure
 
-    with pytest.raises(Exception) as e:
+    with pytest.raises(ValueError) as e:  # Assuming ValueError is raised for invalid dimensions
         index.search_batch(bad_query, k=1)
 
     assert "Expected dimension 4" in str(e.value)
