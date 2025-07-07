@@ -139,21 +139,22 @@ impl AnnIndex {
     }
 
     /// Batch-search k nearest neighbors for each row in an (N×dim) array.
-    ///
+    /// 
     /// Args:
     ///     query (ndarray): Query vector
     ///     k (int): Number of neighbors
+    ///     filter_fn (Callable[[int], bool]): Filter function
     ///
     /// Returns:
-    ///     Tuple[ndarray, ndarray]: (neighbor IDs, distances)
+    ///     Tuple[ndarray, ndarray]: Filtered (neighbor IDs, distances)
     pub fn search_batch(
         &self,
         py: Python,
         data: PyReadonlyArray2<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
-    let arr = data.as_array();
-    let n = arr.nrows();
+         let arr = data.as_array();
+         let n = arr.nrows();
 
     let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
         (0..n)
@@ -247,6 +248,7 @@ impl AnnIndex {
     Ok((ids, dists))
     }
 }
+
 impl AnnBackend for AnnIndex {
     fn new(dim: usize, metric: Distance) -> Self {
         AnnIndex {
