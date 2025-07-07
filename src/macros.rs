@@ -93,21 +93,24 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn save(&self, path: String) -> PyResult<()> {
-                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
-                }
+                Self::validate_path(&path)?;
                 self.inner.save(&path);
                 Ok(())
             }
             #[staticmethod]
             fn load(path: String) -> PyResult<Self> {
-                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
-                }
+                Self::validate_path(&path)?;
                 match #name::load(&path) {
                     Ok(inner) => Ok(Py#name { inner }),
                     Err(e) => Err(PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string())),
                 }
+            }
+
+            fn validate_path(path: &str) -> PyResult<()> {
+                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
+                }
+                Ok(())
             }
         }
     };
