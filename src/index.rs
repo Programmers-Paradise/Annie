@@ -153,9 +153,17 @@ impl AnnIndex {
         data: PyReadonlyArray2<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
-         let arr = data.as_array();
-         let n = arr.nrows();
+        let arr = data.as_array();
+        let n = arr.nrows();
 
+      let arr = data.as_array();
+    let n = arr.nrows();
+    if arr.ncols() != self.dim {
+        return Err(RustAnnError::py_err(
+            "Dimension Error",
+            format!("Expected query shape (N, {}), got (N, {})", self.dim, arr.ncols())
+        ));
+    }
     let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
         (0..n)
             .into_par_iter()
@@ -166,6 +174,7 @@ impl AnnIndex {
                 self.inner_search(&q, q_sq, k)
             })
             .collect()
+    });
     });
 
     let (all_ids, all_dists): (Vec<_>, Vec<_>) = results?.into_iter().unzip();
