@@ -205,9 +205,9 @@ That’s a \~4× speedup vs. NumPy!
 
 | Operation	           | Dataset Size  | Time (ms) | Speedup vs Python | 
 | -------------------- | ------------- | --------- | ----------------- | 
-| Single Query (Brute) | 10,000 × 64   | 0.7	   | 4×                | 
-| Batch Query (64)	   | 10,000 × 64   | 0.23	   | 12×               | 
-| HNSW Query	       | 100,000 × 128 | 0.05	   | 56×               |
+| Single Query (Brute) | 10,000 × 64   | 0.7	     | 4×                | 
+| Batch Query (64)	   | 10,000 × 64   | 0.23	     | 12×               | 
+| HNSW Query	         | 100,000 × 128 | 0.05	     | 56×               |
 
 ##### [View Full Benchmark Dashboard →](https://programmers-paradise.github.io/Annie/)
 
@@ -219,16 +219,16 @@ You’ll find:
 
 | Class              | Description                                 |
 | ------------------ | --------------------------------------------|
-| AnnIndex	         | Brute-force exact search                    |
-| PyHnswIndex	       | Approximate HNSW index                      |
+| AnnIndex	         |  Brute-force exact search                   |
+| PyHnswIndex	       |  Approximate HNSW index                     |
 | ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex           |
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc)  |
 | Index              |Unified wrapper over AnnIndex and PyHnswIndex|
 
 ### Utility Module
 
-| Module | Description |
-| ------ | ----------- |
+| Module | Description                                         |
+| ------ | --------------------------------------------------- |
 | utils  | Provides utility functions for distance computation |
 
 ### Key Methods
@@ -244,8 +244,8 @@ You’ll find:
 
 ### Utility Functions
 
-| Function                             | Description                                |
-| ------------------------------------ | ------------------------------------------ |
+| Function                                                                          | Description                                             |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | compute_distances_with_ids(entries, query, query_sq_norm, metric, minkowski_p, k) | Computes distances and returns sorted IDs and distances |
 
 ## Development & CI
