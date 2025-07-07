@@ -13,22 +13,22 @@ Creates a new thread-safe index.
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
-Thread-safe vector addition.
+Thread-safe vector addition. This method now includes enhanced error handling for write locks. If a write lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire write lock".
 
 ### `remove(ids: List[int])`
-Thread-safe removal by IDs.
+Thread-safe removal by IDs. This method now includes enhanced error handling for write locks. If a write lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire write lock".
 
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe single query search.
+Thread-safe single query search. This method now includes enhanced error handling for read locks. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock".
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe batch search. This method now includes enhanced error handling for read locks. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock for search_batch".
+Thread-safe batch search. This method includes enhanced error handling for read locks. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock for search_batch". Additionally, any errors during parallel search are propagated as `RustAnnError`.
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
 Thread-safe filtered search using a custom Python callback function.
 
 ### `save(path: str)`
-Thread-safe save.
+Thread-safe save. This method now includes enhanced error handling for read locks. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock".
 
 ### `static load(path: str) -> ThreadSafeAnnIndex`
 Thread-safe load.
