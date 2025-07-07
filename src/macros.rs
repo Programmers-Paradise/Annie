@@ -29,7 +29,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let backend = backend_name.expect("Must specify backend name");
+// Removed unused backend variable
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     
