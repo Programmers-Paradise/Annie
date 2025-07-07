@@ -139,36 +139,46 @@ impl AnnIndex {
     }
 
     /// Batch-search k nearest neighbors for each row in an (N×dim) array.
-    /// 
+    ///
     /// Args:
     ///     query (ndarray): Query vector
     ///     k (int): Number of neighbors
-    ///     filter_fn (Callable[[int], bool]): Filter function
     ///
     /// Returns:
-    ///     Tuple[ndarray, ndarray]: Filtered (neighbor IDs, distances)
+    ///     Tuple[ndarray, ndarray]: (neighbor IDs, distances)
     pub fn search_batch(
         &self,
         py: Python,
         data: PyReadonlyArray2<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
-        let arr = data.as_array();
-        let n = arr.nrows();
+    let arr = data.as_array();
+    let n = arr.nrows();
 
-        // Release the GIL around the parallel batch:
-        let results: Vec<(Vec<i64>, Vec<f32>)> = py.allow_threads(|| {
-            (0..n)
-                .into_par_iter()
-                .map(|i| {
-                    let row = arr.row(i);
-                    let q: Vec<f32> = row.to_vec();
-                    let q_sq = q.iter().map(|x| x * x).sum::<f32>();
-                    // safe unwrap: dims validated
-                    self.inner_search(&q, q_sq, k).unwrap()
-                })
-                .collect::<Vec<_>>()
-        });
+    let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
+        (0..n)
+            .into_par_iter()
+            .map(|i| {
+                let row = arr.row(i);
+                let q: Vec<f32> = row.to_vec();
+                let q_sq = q.iter().map(|x| x * x).sum::<f32>();
+                self.inner_search(&q, q_sq, k)
+            })
+            .collect()
+    });
+
+    let (all_ids, all_dists): (Vec<_>, Vec<_>) = results?.into_iter().unzip();
+
+    let ids_arr: Array2<i64> = Array2::from_shape_vec((n, k), all_ids.concat())
+        .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape ids failed: {}", e)))?;
+    let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists.concat())
+        .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
+
+    Ok((
+        ids_arr.into_pyarray(py).to_object(py),
+        dists_arr.into_pyarray(py).to_object(py),
+    ))
+    }
 
         // Flatten the results
         let mut all_ids = Vec::with_capacity(n * k);
