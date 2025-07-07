@@ -1,3 +1,4 @@
+pub mod py_index;
 mod utils;
 pub mod index;
 mod storage;
@@ -22,6 +23,7 @@ use crate::index::AnnIndex;
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
+use crate::py_index::PyIndex;
 
 #[pyclass]
 pub struct PyHnswIndex {
@@ -102,5 +104,6 @@ fn rust_annie(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Distance>()?;
     m.add_class::<ThreadSafeAnnIndex>()?;
     m.add_class::<PyHnswIndex>()?;
+    m.add_class::<PyIndex>()?;
     Ok(())
 }

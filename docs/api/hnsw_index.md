@@ -31,6 +31,14 @@ Save index to disk.
 ### `static load(path: str) -> PyHnswIndex`
 Load index from disk (currently not implemented)
 
+## New Features
+
+### `user_ids` Field
+The `HnswIndex` struct now includes a `user_ids` field, which stores user-defined IDs for the vectors. This allows for more flexible identification and retrieval of vectors within the index.
+
+### `py_annindex` Macro
+The `py_annindex` macro is used to automatically generate Python bindings for the HNSW index. It simplifies the creation of Python classes from Rust structs, ensuring that the HNSW index can be easily used within Python environments.
+
 ## Example
 ```python
 import numpy as np
