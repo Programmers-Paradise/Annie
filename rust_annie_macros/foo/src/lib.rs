@@ -32,7 +32,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let backend = backend_name.expect("Must specify backend name");
+// Removed unused backend variable
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     
@@ -98,11 +98,10 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 self.inner.search(&vector, k)
             }
 
-            fn save(&self, path: String) {
-                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    panic!("Invalid file path");
-                }
+            fn save(&self, path: String) -> PyResult<()> {
+                Self::validate_path(&path)?;
                 self.inner.save(&path);
+                Ok(())
             }
             
             #[staticmethod]
@@ -114,6 +113,13 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                     Ok(inner) => Ok(#py_name { inner }),
                     Err(e) => Err(pyo3::exceptions::PyIOError::new_err(e.to_string())),
                 }
+            }
+
+            fn validate_path(path: &str) -> PyResult<()> {
+                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
+                }
+                Ok(())
             }
         }
     };

@@ -9,7 +9,6 @@ use rust_annie_macros::py_annindex;
 pub struct HnswIndex {
     index: Hnsw<'static, f32, DistL2>,
     dims: usize,
-    user_ids: Vec<i64>,
 }
 
 impl HnswIndex {
