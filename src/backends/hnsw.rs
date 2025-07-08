@@ -1,9 +1,11 @@
 use hnsw_rs::prelude::*;
 use crate::backends::ann_backend::AnnBackend;
 use crate::metrics::Distance;
+use rust_annie_macros::py_annindex;
 
 /// HNSW backend implementation.
 /// For now, only supports Euclidean (L2) distance.
+#[py_annindex(backend = "HNSW", distance = "Euclidean")]
 pub struct HnswIndex {
     index: Hnsw<'static, f32, DistL2>,
     dims: usize,

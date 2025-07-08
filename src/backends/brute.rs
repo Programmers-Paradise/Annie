@@ -1,6 +1,8 @@
 use crate::distance::{Distance, euclidean, cosine, manhattan, chebyshev};
 use super::ann_backend::AnnBackend;
+use rust_annie_macros::py_annindex;
 
+#[py_annindex(backend = "BruteForce", distance = "Euclidean")]
 pub struct BruteForceIndex {
     vectors: Vec<Vec<f32>>,
     distance: Distance,

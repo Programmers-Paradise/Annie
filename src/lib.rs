@@ -1,55 +1,3 @@
-//! 🚀 rust_annie - Blazingly fast Approximate Nearest Neighbors in Rust
-//!
-//! This library provides efficient implementations of nearest neighbor search algorithms.
-//! 
-//! ## Features
-//! - Multiple distance metrics (Euclidean, Cosine, Manhattan, Chebyshev)
-//! - Brute-force and HNSW backends
-//! - Thread-safe indexes
-//! - GPU acceleration support
-//! - Filtered search capabilities
-//!
-//! ## Quick Start
-//! ```python
-//! import numpy as np
-//! from rust_annie import AnnIndex, Distance
-//!
-//! # Create index
-//! dim = 128
-//! index = AnnIndex(dim, Distance.EUCLIDEAN)
-//!
-//! # Add data
-//! data = np.random.rand(1000, dim).astype(np.float32)
-//! ids = np.arange(1000, dtype=np.int64)
-//! index.add(data, ids)
-//!
-//! # Search
-//! query = np.random.rand(dim).astype(np.float32)
-//! neighbor_ids, distances = index.search(query, k=5)
-//! ```
-//!
-//! ## Advanced Usage
-//! ```python
-//! # Thread-safe index
-//! from rust_annie import ThreadSafeAnnIndex
-//! ts_index = ThreadSafeAnnIndex(dim, Distance.COSINE)
-//!
-//! # HNSW index
-//! from rust_annie import PyHnswIndex
-//! hnsw_index = PyHnswIndex(dims=128)
-//!
-//! # Filtered search
-//! def even_ids(id: int) -> bool:
-//!     return id % 2 == 0
-//!     
-//! ids, dists = index.search_filter_py(query, k=5, filter_fn=even_ids)
-//! ```
-//!
-//! ## Saving/Loading
-//! ```python
-//! index.save("my_index.bin")
-//! loaded = AnnIndex.load("my_index.bin")
-//! ```
 pub mod py_index;
 mod utils;
 pub mod index;
@@ -57,7 +5,6 @@ mod storage;
 pub mod metrics;
 mod errors;
 mod concurrency;
-
 mod backend;
 pub mod hnsw_index;
 mod index_enum;
@@ -74,6 +21,7 @@ use crate::index::AnnIndex;
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
+use rust_annie_macros::py_annindex;
 use crate::py_index::PyIndex;
 
 #[pyclass]
