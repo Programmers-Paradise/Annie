@@ -4,9 +4,11 @@ version = "0.2.0"
 edition = "2021"
 
 [lib]
+name = "rust_annie"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+rust_annie_macros = { path = "rust_annie_macros/foo" }
 # PyO3 for Python bindings
 pyo3 = { version = "0.18.3", features = ["extension-module"] }   
 hnsw_rs = "0.3.2"
@@ -31,3 +33,6 @@ hip-rs = { version = "1.0", optional = true }  # Changed to hip-rs
 [features]
 cuda = ["cust"]
 rocm = ["hip-rs"]  # Feature points to hip-rs
+
+[workspace]
+members = [".", "rust_annie_macros/foo"]

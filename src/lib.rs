@@ -57,7 +57,6 @@ mod storage;
 pub mod metrics;
 mod errors;
 mod concurrency;
-mod macros;
 mod backend;
 pub mod hnsw_index;
 mod index_enum;
@@ -74,6 +73,7 @@ use crate::index::AnnIndex;
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
+use rust_annie_macros::py_annindex;
 
 #[pyclass]
 pub struct PyHnswIndex {

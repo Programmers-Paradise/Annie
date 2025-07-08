@@ -1,6 +1,9 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput, AttributeArgs, NestedMeta, Lit, Meta};
+use syn::spanned::Spanned;
+use proc_macro2::Span;
+use syn::Ident;
 
 #[proc_macro_attribute]
 pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -33,33 +36,36 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
     
+    // Create new identifier for Python struct
+    let py_name = Ident::new(&format!("Py{}", name), Span::call_site());
+    
     let expanded = quote! {
         #input
         
-        #[pyclass]
-        pub struct Py#name {
+        #[pyo3::pyclass]
+        pub struct #py_name {
             inner: #name,
         }
 
-        #[pymethods]
-        impl Py#name {
+        #[pyo3::pymethods]
+        impl #py_name {
             #[new]
             fn new(dim: usize) -> Self {
-                Py#name {
+                #py_name {
                     inner: #name::new(dim, #distance_metric),
                 }
             }
 
             fn add(
                 &mut self,
-                py: Python,
-                data: PyReadonlyArray2<f32>,
-                ids: PyReadonlyArray1<i64>
-            ) -> PyResult<()> {
+                py: pyo3::Python,
+                data: numpy::PyReadonlyArray2<f32>,
+                ids: numpy::PyReadonlyArray1<i64>
+            ) -> pyo3::PyResult<()> {
                 let dims = self.inner.dims();
                 let shape = data.shape();
                 if shape.len() != 2 || shape[1] != dims {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    return Err(pyo3::exceptions::PyValueError::new_err(
                         format!("Input data must be of shape (n, {})", dims),
                     ));
                 }
@@ -69,7 +75,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let n_vectors = shape[0];
 
                 if ids_slice.len() != n_vectors {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                    return Err(pyo3::exceptions::PyValueError::new_err(
                         "ids length must match number of vectors",
                     ));
                 }
@@ -98,14 +104,15 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
                 self.inner.save(&path);
             }
+            
             #[staticmethod]
-            fn load(path: String) -> PyResult<Self> {
+            fn load(path: String) -> pyo3::PyResult<Self> {
                 if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
+                    return Err(pyo3::exceptions::PyValueError::new_err("Invalid file path"));
                 }
                 match #name::load(&path) {
-                    Ok(inner) => Ok(Py#name { inner }),
-                    Err(e) => Err(PyErr::new::<pyo3::exceptions::PyIOError, _>(e.to_string())),
+                    Ok(inner) => Ok(#py_name { inner }),
+                    Err(e) => Err(pyo3::exceptions::PyIOError::new_err(e.to_string())),
                 }
             }
         }
