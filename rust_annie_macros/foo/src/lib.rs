@@ -8,16 +8,13 @@ use syn::Ident;
 #[proc_macro_attribute]
 pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
     let args = parse_macro_input!(attr as AttributeArgs);
-    let mut backend_name = None;
+// Removed unused backend_name variable
     let mut distance_metric = quote! { crate::metrics::Distance::Euclidean };
 
     // Parse attributes
     for arg in args {
         if let NestedMeta::Meta(Meta::NameValue(nv)) = arg {
-            if nv.path.is_ident("backend") {
-                if let Lit::Str(s) = &nv.lit {
-                    backend_name = Some(s.value());
-                }
+// Removed parsing logic for unused backend attribute
             } else if nv.path.is_ident("distance") {
                 if let Lit::Str(s) = &nv.lit {
                     distance_metric = match s.value().as_str() {
