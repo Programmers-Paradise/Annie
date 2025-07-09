@@ -1,69 +1,181 @@
 # AnnIndex - Brute-force Nearest Neighbor Search
 
-The `AnnIndex` class provides efficient brute-force nearest neighbor search with support for multiple distance metrics and additional features like filtered search.
+The `AnnIndex` class provides efficient brute-force nearest neighbor search with support for multiple distance metrics and additional features like filtered search. It leverages parallel processing capabilities for batch operations.
 
 ## Constructor
 
 ### `AnnIndex(dim: int, metric: Distance)`
-Creates a new brute-force index.
+Creates a new brute-force index for unit-variant metrics (Euclidean, Cosine, Manhattan, Chebyshev).
 
-- `dim` (int): Vector dimension
-- `metric` (Distance): Distance metric (`EUCLIDEAN`, `COSINE`, `MANHATTAN`, `CHEBYSHEV`)
+- `dim` (int): Vector dimension. Must be greater than 0.
+- `metric` (Distance): Distance metric to use for similarity computation. Options: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`.
+- Returns: `AnnIndex`: A new empty index instance.
+- Raises: `RustAnnError`: If dimension is 0 or invalid.
+
+Example:
+```python
+from annindex import AnnIndex, Distance
+index = AnnIndex(128, Distance.EUCLIDEAN)
+index = AnnIndex(256, Distance.COSINE)
+```
 
 ### `new_minkowski(dim: int, p: float)`
 Creates a Minkowski distance index.
 
-- `dim` (int): Vector dimension
-- `p` (float): Minkowski exponent (p > 0)
+- `dim` (int): Vector dimension. Must be greater than 0.
+- `p` (float): Minkowski exponent. Must be greater than 0. When p=1, equivalent to Manhattan distance. When p=2, equivalent to Euclidean distance.
+- Returns: `AnnIndex`: A new empty index instance configured for Minkowski-p distance.
+- Raises: `RustAnnError`: If dimension is 0 or p <= 0.
+
+Example:
+```python
+index = AnnIndex.new_minkowski(128, 1.5)
+index = AnnIndex.new_minkowski(64, 3.0)
+```
 
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
-Add vectors to the index.
+Add a batch of vectors with their corresponding IDs to the index.
 
-- `data`: N×dim array of float32 vectors
-- `ids`: N-dimensional array of int64 IDs
+- `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
+- `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
+- Raises: `RustAnnError`: If data and ids have different lengths, or if any vector has incorrect dimension.
+
+Example:
+```python
+import numpy as np
+data = np.random.rand(100, 128).astype(np.float32)
+ids = np.arange(100, dtype=np.int64)
+index.add(data, ids)
+```
+
+### `remove(ids: List[int])`
+Remove entries from the index by their IDs.
+
+- `ids` (List[int]): List of IDs to remove from the index. IDs that don't exist in the index are ignored.
+
+Example:
+```python
+index.remove([1, 5, 10])  # Remove vectors with IDs 1, 5, and 10
+index.remove([])  # No-op for empty list
+```
 
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Search for k nearest neighbors.
+Search for the k nearest neighbors of a query vector.
 
-- `query`: dim-dimensional query vector
-- `k`: Number of neighbors to return
-- Returns: (neighbor IDs, distances)
+- `query` (numpy.ndarray): Query vector with dimension matching the index. Should be a 1D array of float32 values.
+- `k` (int): Number of nearest neighbors to return. Must be positive.
+- Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
+  - neighbor_ids: Array of k nearest neighbor IDs (int64)
+  - distances: Array of k corresponding distances (float32)
+- Raises: `RustAnnError`: If query dimension doesn't match index dimension.
+
+Example:
+```python
+import numpy as np
+query = np.random.rand(128).astype(np.float32)
+neighbor_ids, distances = index.search(query, 10)
+print(f"Found {len(neighbor_ids)} neighbors")
+```
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Batch search for multiple queries.
+Batch search for k nearest neighbors for multiple query vectors.
 
-- `queries`: M×dim array of queries
-- `k`: Number of neighbors per query
-- Returns: (M×k IDs, M×k distances)
-- Errors: 
-  - `Lock Error`: Failed to acquire read lock for `search_batch`.
-  - `SearchBatch Error`: Indicates a failure during the batch search process, with specific row information.
+- `queries` (numpy.ndarray): N x dim array of query vectors. Each row is a query.
+- `k` (int): Number of nearest neighbors to return for each query.
+- Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
+  - neighbor_ids: N x k array of neighbor IDs for each query (int64)
+  - distances: N x k array of distances for each query (float32)
+- Raises: `RustAnnError`: If query dimensions don't match index dimension, or if parallel processing fails.
+
+Example:
+```python
+import numpy as np
+queries = np.random.rand(50, 128).astype(np.float32)
+neighbor_ids, distances = index.search_batch(queries, 5)
+print(f"Shape: {neighbor_ids.shape}")  # (50, 5)
+```
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
 Search with ID filtering.
 
-- `query`: dim-dimensional query vector
-- `k`: Maximum neighbors to return
-- `filter_fn`: Function that returns True for allowed IDs
+- `query` (dim-dimensional query vector)
+- `k` (Maximum neighbors to return)
+- `filter_fn` (Function that returns True for allowed IDs)
 - Returns: (filtered IDs, filtered distances)
 
 ### `len() -> int`
-Get the number of entries in the index.
+Get the number of vectors currently stored in the index.
 
-- Returns: Number of entries in the index
+- Returns: int: The number of vectors in the index.
+
+Example:
+```python
+len(index)  # This calls __len__ internally
+1000
+index.len()  # Direct method call
+1000
+```
 
 ### `dim() -> int`
-Get the dimension of vectors in the index.
+Get the dimension of vectors stored in the index.
 
-- Returns: Dimension of vectors
+- Returns: int: The vector dimension.
+- Raises: RuntimeError: If the index is empty (no vectors added yet).
+
+Example:
+```python
+index.dim()
+128
+```
 
 ### `save(path: str)`
-Save index to disk.
+Save the index to a binary file.
+
+- `path` (str): Base path for the saved file. The '.bin' extension will be automatically appended.
+- Raises: `RustAnnError`: If the file cannot be written or serialization fails.
+
+Example:
+```python
+index.save("my_index")  # Saves to "my_index.bin"
+index.save("/path/to/index")  # Saves to "/path/to/index.bin"
+```
 
 ### `static load(path: str) -> AnnIndex`
-Load index from disk.
+Load an index from a binary file.
+
+- `path` (str): Base path of the saved file. The '.bin' extension will be automatically appended.
+- Returns: `AnnIndex`: The loaded index instance with all vectors and configuration.
+- Raises: `RustAnnError`: If the file cannot be read or deserialization fails.
+
+Example:
+```python
+index = AnnIndex.load("my_index")  # Loads from "my_index.bin"
+index = AnnIndex.load("/path/to/index")  # Loads from "/path/to/index.bin"
+```
+
+### `__len__() -> int`
+Get the number of vectors in the index (implements len()).
+
+- Returns: int: The number of vectors in the index.
+
+Example:
+```python
+len(index)
+1000
+```
+
+### `__repr__() -> str`
+Get a string representation of the index.
+
+- Returns: str: A descriptive string showing index statistics.
+
+Example:
+```python
+print(index)
+AnnIndex(dim=128, metric=Euclidean, entries=1000)
+```
 
 ## Example
 ```python
@@ -301,6 +413,7 @@ You’ll find:
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
 | add(data, ids)	                      | Add vectors to index                       | 
+| remove(ids)                           | Remove vectors from index by IDs           |
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
