@@ -39,8 +39,7 @@ fn bytes_to_f32_vec(data: &[u8]) -> Vec<f32> {
         })
         .filter(|&f| {
             // Filter out signaling NaNs but allow quiet NaNs
-            !(f.is_nan() && (f.to_bits() & 0x00400000 == 0))
-        })
+            !(f.is_nan() && f32::from_bits(f.to_bits() | 0x00400000).is_nan())
         })
         .collect()
 }
