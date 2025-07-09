@@ -2,6 +2,8 @@
 use libfuzzer_sys::fuzz_target;
 use rust_annie::metrics::{euclidean, cosine, manhattan, chebyshev};
 
+const QUIET_NAN_MASK: u32 = 0x0040_0000;
+
 fuzz_target!(|data: &[u8]| {
     // Split input into two vectors of f32
     let (a, b) = if data.len() < 8 {
@@ -39,9 +41,6 @@ fn bytes_to_f32_vec(data: &[u8]) -> Vec<f32> {
         })
         .filter(|&f| {
             // Filter out signaling NaNs but allow quiet NaNs.
-            // Signaling NaNs (sNaNs) are designed to raise exceptions when used in computations,
-            // which can disrupt the fuzzing process. Quiet NaNs (qNaNs), on the other hand,
-            // propagate through computations without causing exceptions, making them safe to include.
             !(f.is_nan() && f32::from_bits(f.to_bits() | QUIET_NAN_MASK).is_nan())
         })
         .collect()
