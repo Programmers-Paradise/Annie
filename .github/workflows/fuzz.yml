@@ -1,6 +1,9 @@
 name: Fuzz Testing
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   fuzz:
     runs-on: ubuntu-latest
@@ -11,8 +14,9 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly  
           components: rust-src
+          override: true
           
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
