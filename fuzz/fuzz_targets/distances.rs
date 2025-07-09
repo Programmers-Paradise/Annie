@@ -38,7 +38,10 @@ fn bytes_to_f32_vec(data: &[u8]) -> Vec<f32> {
             f32::from_ne_bytes(bytes)
         })
         .filter(|&f| {
-            // Filter out signaling NaNs but allow quiet NaNs
+            // Filter out signaling NaNs but allow quiet NaNs.
+            // Signaling NaNs (sNaNs) are designed to raise exceptions when used in computations,
+            // which can disrupt the fuzzing process. Quiet NaNs (qNaNs), on the other hand,
+            // propagate through computations without causing exceptions, making them safe to include.
             !(f.is_nan() && f32::from_bits(f.to_bits() | QUIET_NAN_MASK).is_nan())
         })
         .collect()
