@@ -1,4 +1,4 @@
-name: CI Testing / Fuzz Testing
+name: Fuzz Testing
 on: [push, pull_request]
 
 permissions:
@@ -10,24 +10,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
-      - name: Install Rust (nightly)
+        
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly  
           components: rust-src
           override: true
-
+          
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz
-
-      - name: Check fuzz directory exists
-        run: |
-          if [ ! -d fuzz ]; then
-            echo "No fuzz directory found, skipping fuzz tests."
-            exit 0
-          fi
-
+        
       - name: Run fuzz tests
         run: |
           cd fuzz
