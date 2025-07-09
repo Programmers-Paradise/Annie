@@ -48,6 +48,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **GPU Acceleration** for brute-force calculations
 - **Multi-platform** support (Linux, Windows, macOS)
 - **Automated CI** with performance tracking
+- **Fuzz Testing** for robustness and security
 
 ## Quick Start
 
@@ -272,6 +273,40 @@ CI pipeline includes:
   - Unit tests and integration tests
   - Performance benchmarking
   - Documentation generation
+  - Fuzz testing for robustness
+
+### Fuzz Testing
+
+Fuzz testing is integrated to ensure robustness and security of the codebase. It runs automatically on GitHub Actions for each push and pull request.
+
+```yaml
+name: Fuzz Testing
+on: [push, pull_request]
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rust-src
+          
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+        
+      - name: Run fuzz tests
+        run: |
+          cd fuzz
+          cargo fuzz run distances -- -max_total_time=60
+        env:
+          RUSTFLAGS: -C debug-assertions=no
+          RUST_BACKTRACE: full
+```
 
 ### Benchmark Automation
 
