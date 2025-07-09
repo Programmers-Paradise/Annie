@@ -28,7 +28,6 @@ pub struct AnnIndex {
 #[pymethods]
 impl AnnIndex {
     #[new]
-    #[pyo3(text_signature = "(dim, metric, /)")]
     /// Create a new index for unit-variant metrics (Euclidean, Cosine, Manhattan, Chebyshev).
     /// 
     /// Args:
@@ -60,7 +59,6 @@ impl AnnIndex {
     }
 
     #[staticmethod]
-    #[pyo3(text_signature = "(dim, p, /)")]
     /// Create a new index using Minkowski-p distance (p > 0).
     /// 
     /// Args:
@@ -93,7 +91,6 @@ impl AnnIndex {
         })
     }
 
-    #[pyo3(text_signature = "($self, data, ids, /)")]
     /// Add a batch of vectors with their corresponding IDs to the index.
     /// 
     /// Args:
@@ -136,7 +133,6 @@ impl AnnIndex {
         Ok(())
     }
 
-    #[pyo3(text_signature = "($self, ids, /)")]
     /// Remove entries from the index by their IDs.
     /// 
     /// Args:
@@ -154,7 +150,6 @@ impl AnnIndex {
         Ok(())
     }
 
-    #[pyo3(text_signature = "($self, query, k, /)")]
     /// Search for the k nearest neighbors of a query vector.
     /// 
     /// Args:
@@ -196,7 +191,6 @@ impl AnnIndex {
         ))
     }
 
-    #[pyo3(text_signature = "($self, data, k, /)")]
     /// Batch search for k nearest neighbors for multiple query vectors.
     /// 
     /// Performs parallel search across multiple query vectors for improved performance
@@ -265,7 +259,6 @@ impl AnnIndex {
         ))
     }
     
-    #[pyo3(text_signature = "($self, path, /)")]
     /// Save the index to a binary file.
     /// 
     /// Serializes the entire index (including vectors, IDs, and configuration)
@@ -287,7 +280,6 @@ impl AnnIndex {
     }
 
     #[staticmethod]
-    #[pyo3(text_signature = "(path, /)")]
     /// Load an index from a binary file.
     /// 
     /// Deserializes a previously saved index from a binary file with '.bin' extension
@@ -311,7 +303,6 @@ impl AnnIndex {
         load_index(&full).map_err(|e| e.into_pyerr())
     }
 
-    #[pyo3(text_signature = "($self, /)")]
     /// Get the number of vectors currently stored in the index.
     /// 
     /// Returns:
@@ -326,7 +317,6 @@ impl AnnIndex {
         self.entries.len()
     }
 
-    #[pyo3(text_signature = "($self, /)")]
     /// Get the dimension of vectors stored in the index.
     /// 
     /// Returns:
@@ -345,7 +335,6 @@ impl AnnIndex {
         self.dim
     }
 
-    #[pyo3(text_signature = "($self, /)")]
     /// Get the number of vectors in the index (implements len()).
     /// 
     /// Returns:
@@ -358,7 +347,6 @@ impl AnnIndex {
         self.entries.len()
     }
 
-    #[pyo3(text_signature = "($self, /)")]
     /// Get a string representation of the index.
     /// 
     /// Returns:
