@@ -133,8 +133,8 @@ impl AnnIndex {
         let (ids, dists) = result?;
 
         Ok((
-            ids.into_pyarray(py).to_object(py),
-            dists.into_pyarray(py).to_object(py),
+            ids.into_pyarray(py).into(),
+            dists.into_pyarray(py).into(),
         ))
     }
 
@@ -187,8 +187,8 @@ impl AnnIndex {
             .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
         
         Ok((
-            ids_arr.into_pyarray(py).to_object(py),
-            dists_arr.into_pyarray(py).to_object(py),
+            ids_arr.into_pyarray(py).into(),
+            dists_arr.into_pyarray(py).into(),
         ))
     }
     

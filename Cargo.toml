@@ -10,12 +10,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 rust_annie_macros = { path = "rust_annie_macros/foo" }
 # PyO3 for Python bindings
-pyo3 = { version = "0.18.3", features = ["extension-module"] }   
+pyo3 = { version = "0.25.0", features = ["extension-module"] }
 hnsw_rs = "0.3.2"
 # Removed the unused `home` dependency
 
 # Rust–NumPy interoperability
-numpy = "0.18.0"
+numpy = "0.25"
 
 # ndarray for constructing 2D arrays
 ndarray = "0.15.4"

@@ -14,15 +14,17 @@ mod filters;
 #[cfg(any(feature = "cuda", feature = "rocm"))]
 pub mod gpu;
 
+use crate::py_index::PyIndex;
 use pyo3::prelude::*;
-use numpy::{PyReadonlyArray1, PyReadonlyArray2};
+use numpy::{PyReadonlyArray1, PyReadonlyArray2,PyUntypedArrayMethods,PyArrayDescrMethods};
 use crate::backend::AnnBackend;
 use crate::index::AnnIndex;
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
 use rust_annie_macros::py_annindex;
-use crate::py_index::PyIndex;
+use pyo3::Bound;
+use pyo3::types::PyModule;
 
 #[pyclass]
 pub struct PyHnswIndex {
@@ -43,11 +45,11 @@ impl PyHnswIndex {
     }
 
     fn add(&mut self, py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>) -> PyResult<()> {
-        if !data.dtype().is_equiv_to(numpy::dtype::<f32>(py)) {
+        if !data.dtype().is_equiv_to(&numpy::dtype::<f32>(py)) {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>("Input data must be of type f32"));
         }
 
-        if !ids.dtype().is_equiv_to(numpy::dtype::<i64>(py)) {
+        if !ids.dtype().is_equiv_to(&numpy::dtype::<i64>(py)) {
             return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
                 "ids array must be of type i64",
             ));
@@ -98,7 +100,7 @@ impl PyHnswIndex {
 }
 
 #[pymodule]
-fn rust_annie(_py: Python, m: &PyModule) -> PyResult<()> {
+fn rust_annie(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<AnnIndex>()?;
     m.add_class::<Distance>()?;
     m.add_class::<ThreadSafeAnnIndex>()?;
