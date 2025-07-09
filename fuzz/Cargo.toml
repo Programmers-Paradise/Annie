@@ -13,8 +13,6 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-pyo3 = { version = "0.18.3", features = ["extension-module"] }  
-
 [dependencies.rust_annie]
 path = ".."
 
