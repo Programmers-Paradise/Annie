@@ -339,7 +339,7 @@ You’ll find:
 
 Create a brute-force k-NN index.
 
-Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`
+Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`
 
 ### ThreadSafeAnnIndex
 
