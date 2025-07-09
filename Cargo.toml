@@ -12,7 +12,6 @@ rust_annie_macros = { path = "rust_annie_macros/foo" }
 # PyO3 for Python bindings
 pyo3 = { version = "0.18.3", features = ["extension-module"] }   
 hnsw_rs = "0.3.2"
-# Removed the unused `home` dependency
 
 # Rust–NumPy interoperability
 numpy = "0.18.0"
@@ -28,13 +27,11 @@ rayon = "1.7"
 
 # GPU backends (optional)
 cust = { version = "0.3", optional = true }
-hip-rs = { version = "1.0", optional = true }  # Changed to hip-rs
-
-[dev-dependencies]
+hip-rs = { version = "1.0", optional = true }
 
 [features]
 cuda = ["cust"]
-rocm = ["hip-rs"]  # Feature points to hip-rs
+rocm = ["hip-rs"]
 
 [workspace]
 members = [".", "fuzz", "rust_annie_macros/foo"]
