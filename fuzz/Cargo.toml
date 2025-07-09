@@ -1,0 +1,29 @@
+[package]
+name = "rust_annie-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+pyo3 = { version = "0.18.3", features = ["extension-module"] }  
+
+[dependencies.rust_annie]
+path = ".."
+
+[[bin]]
+name = "fuzz_target_1"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "distances"
+path = "fuzz_targets/distances.rs"
+test = false
+doc = false
+bench = false

@@ -1,0 +1,26 @@
+name: Fuzz Testing
+on: [push, pull_request]
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rust-src
+          
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+        
+      - name: Run fuzz tests
+        run: |
+          cd fuzz
+          cargo fuzz run distances -- -max_total_time=60
+        env:
+          RUSTFLAGS: -C debug-assertions=no
+          RUST_BACKTRACE: full

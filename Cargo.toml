@@ -30,9 +30,11 @@ rayon = "1.7"
 cust = { version = "0.3", optional = true }
 hip-rs = { version = "1.0", optional = true }  # Changed to hip-rs
 
+[dev-dependencies]
+
 [features]
 cuda = ["cust"]
 rocm = ["hip-rs"]  # Feature points to hip-rs
 
 [workspace]
-members = [".", "rust_annie_macros/foo"]
+members = [".", "fuzz", "rust_annie_macros/foo"]
