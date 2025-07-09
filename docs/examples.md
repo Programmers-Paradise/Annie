@@ -111,6 +111,20 @@ query = np.random.rand(64).astype(np.float32)
 ids, dists = index.search(query, k=5)
 ```
 
+## Fuzz Testing
+Fuzz testing has been integrated to ensure robustness against unexpected inputs. The fuzz targets focus on distance calculations and other critical components.
+
+### Running Fuzz Tests
+To run fuzz tests, ensure you have `cargo-fuzz` installed and execute the following commands:
+
+```bash
+# Navigate to the fuzz directory
+cd fuzz
+
+# Run fuzz tests for distance calculations
+cargo fuzz run distances -- -max_total_time=60
+```
+
 # README
 
 ![Annie](https://github.com/Programmers-Paradise/.github/blob/main/ChatGPT%20Image%20May%2015,%202025,%2003_58_16%20PM.png?raw=true)
@@ -133,6 +147,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
    - [Brute-Force Index](#brute-force-index)  
    - [HNSW Index](#hnsw-index)  
    - [Thread-Safe Index](#thread-safe-index)  
+   - [Fuzz Testing](#fuzz-testing)
 5. [Benchmark Results](#benchmark-results)  
 6. [API Reference](#api-reference)  
 7. [Development & CI](#development--ci)  
@@ -155,6 +170,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **GPU Acceleration** for brute-force calculations
 - **Multi-platform** support (Linux, Windows, macOS)
 - **Automated CI** with performance tracking
+- **Fuzz Testing** for robustness against unexpected inputs
 
 ## Installation
 
@@ -373,6 +389,7 @@ CI pipeline includes:
   - Unit tests and integration tests
   - Performance benchmarking
   - Documentation generation
+  - Fuzz testing for robustness
 
 ### Benchmark Automation
 
