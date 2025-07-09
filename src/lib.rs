@@ -21,7 +21,6 @@ use crate::index::AnnIndex;
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
-use rust_annie_macros::py_annindex;
 use crate::py_index::PyIndex;
 
 #[pyclass]
