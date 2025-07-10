@@ -15,7 +15,7 @@ jobs:
       - name: Install Rust nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-06-01  # optional: pin to specific date
+          toolchain: nightly-2024-06-28
           components: rust-src
           override: true
 
