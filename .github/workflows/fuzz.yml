@@ -15,7 +15,7 @@ jobs:
       - name: Install Rust nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly-2024-06-28
+          toolchain: nightly
           components: rust-src
           override: true
 
