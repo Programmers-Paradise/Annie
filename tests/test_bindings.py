@@ -11,5 +11,5 @@ def test_add_and_search():
     query = data[0]
     results = idx.search(query, 5)
     assert len(results[0]) == 5
-    assert isinstance(results[0][0], int)
+    assert isinstance(results[0][0], np.integer)
     
