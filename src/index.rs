@@ -176,6 +176,11 @@ impl AnnIndex {
         query: PyReadonlyArray1<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
+
+        if self.entries.is_empty() {
+            return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
+        }
+
         let q = query.as_slice()?;
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
 
@@ -329,9 +334,6 @@ impl AnnIndex {
     ///     >>> index.dim()
     ///     128
     pub fn dim(&self) -> usize {
-        if self.entries.is_empty() {
-            panic!("Cannot get dimension of empty index");
-        }
         self.dim
     }
 
