@@ -82,7 +82,7 @@ index.add(data, ids)
 
 # Search
 query = np.random.rand(128).astype(np.float32)
-neighbor_ids, _ = index.search(query, k=10)
+neighbor_ids = index.search(query, k=10)
 ```
 
 ### Index (Unified Index Class)

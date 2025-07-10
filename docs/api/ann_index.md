@@ -69,7 +69,7 @@ Search for the k nearest neighbors of a query vector.
 - Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
   - neighbor_ids: Array of k nearest neighbor IDs (int64)
   - distances: Array of k corresponding distances (float32)
-- Raises: `RustAnnError`: If query dimension doesn't match index dimension.
+- Raises: `RustAnnError`: If query dimension doesn't match index dimension or if the index is empty.
 
 Example:
 ```python
@@ -122,7 +122,6 @@ index.len()  # Direct method call
 Get the dimension of vectors stored in the index.
 
 - Returns: int: The vector dimension.
-- Raises: RuntimeError: If the index is empty (no vectors added yet).
 
 Example:
 ```python
