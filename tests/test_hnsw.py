@@ -16,14 +16,11 @@ def test_hnsw_basic():
     query = np.random.rand(dim).astype(np.float32)
     
     # Search
-    retrieved_ids, dists = index.search(query, k=10)
+    retrieved_ids = index.search(query, k=10)
 
     # Convert to numpy arrays if not already
     retrieved_ids = np.array(retrieved_ids)
-    dists = np.array(dists)
     
     # Assertions
     assert retrieved_ids.shape == (10,)
-    assert dists.shape == (10,)
     assert issubclass(retrieved_ids.dtype.type, np.integer)
-    assert issubclass(dists.dtype.type, np.floating)
