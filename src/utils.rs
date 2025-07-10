@@ -32,8 +32,19 @@ pub fn compute_distances_with_ids(
         })
         .collect();
 
-    results.select_nth_unstable_by(k, |a, b| a.1.total_cmp(&b.1));
-    results.truncate(k);
+    // Cap k to prevent out-of-bounds panic
+    let k = k.min(results.len());
+    if k == 0 {
+        return (vec![], vec![]);
+    }
+    println!("entries: {}, k requested: {}", results.len(), k);
+
+    let count = results.len().min(k);
+    if count > 0 {
+        results.select_nth_unstable_by(count - 1, |a, b| a.1.total_cmp(&b.1));
+    }
+    results.truncate(count);
+
 
     let ids = results.iter().map(|(i, _)| *i).collect();
     let dists = results.iter().map(|(_, d)| *d).collect();
