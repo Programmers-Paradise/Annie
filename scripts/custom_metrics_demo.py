@@ -34,6 +34,8 @@ def main():
     def mahalanobis_distance(a, b):
         """Mahalanobis distance using predefined covariance matrix"""
         diff = np.array(a) - np.array(b)
+        if diff.shape[0] != cov_inv.shape[0]:
+            raise ValueError(f"Input vectors must have dimension {cov_inv.shape[0]}, got {diff.shape[0]}")
         return np.sqrt(np.dot(diff, np.dot(cov_inv, diff)))
     
     register_metric("mahalanobis", mahalanobis_distance)
