@@ -1,7 +1,6 @@
 use crate::{AnnIndex, HnswIndex, backend::AnnBackend};
 use pyo3::{Python, PyResult, PyAny, Py};
 use numpy::PyReadonlyArray1;
-use pyo3::IntoPy;
 
 pub enum Index {
     BruteForce(AnnIndex),
@@ -38,7 +37,7 @@ impl Index {
                 let distances = vec![0.0; ids.len()];
                 let ids_py = numpy::PyArray1::from_vec(py, ids).to_owned();
                 let dist_py = numpy::PyArray1::from_vec(py, distances).to_owned();
-                Ok((ids_py.into_py(py), dist_py.into_py(py)))
+                Ok((ids_py.into(), dist_py.into()))
             }
         }
     }

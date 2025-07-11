@@ -18,12 +18,12 @@ Add vectors to the index.
 - `data`: N×dims array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
 
-### `search(vector: ndarray, k: int) -> Tuple[ndarray, ndarray]`
+### `search(vector: ndarray, k: int) -> ndarray`
 Search for k approximate nearest neighbors.
 
 - `vector`: dims-dimensional query vector
 - `k`: Number of neighbors to return
-- Returns: (neighbor IDs, distances)
+- Returns: Neighbor IDs
 
 ### `save(path: str)`
 Save index to disk.
@@ -54,7 +54,7 @@ index.add(data, ids)
 
 # Search
 query = np.random.rand(128).astype(np.float32)
-neighbor_ids, _ = index.search(query, k=10)
+neighbor_ids = index.search(query, k=10)
 ```
 
 ![Annie](https://github.com/Programmers-Paradise/.github/blob/main/ChatGPT%20Image%20May%2015,%202025,%2003_58_16%20PM.png?raw=true)
@@ -147,7 +147,7 @@ index.add(data, ids)
 
 # Search
 query = np.random.rand(128).astype(np.float32)
-neighbor_ids, _ = index.search(query, k=10)
+neighbor_ids = index.search(query, k=10)
 ```
 
 ## Examples

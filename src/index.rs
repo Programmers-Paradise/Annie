@@ -176,6 +176,11 @@ impl AnnIndex {
         query: PyReadonlyArray1<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
+
+        if self.entries.is_empty() {
+            return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
+        }
+
         let q = query.as_slice()?;
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
 
@@ -186,8 +191,8 @@ impl AnnIndex {
         let (ids, dists) = result?;
 
         Ok((
-            ids.into_pyarray(py).to_object(py),
-            dists.into_pyarray(py).to_object(py),
+            ids.into_pyarray(py).into(),
+            dists.into_pyarray(py).into(),
         ))
     }
 
@@ -254,8 +259,8 @@ impl AnnIndex {
             .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
         
         Ok((
-            ids_arr.into_pyarray(py).to_object(py),
-            dists_arr.into_pyarray(py).to_object(py),
+            ids_arr.into_pyarray(py).into(),
+            dists_arr.into_pyarray(py).into(),
         ))
     }
     
@@ -329,9 +334,6 @@ impl AnnIndex {
     ///     >>> index.dim()
     ///     128
     pub fn dim(&self) -> usize {
-        if self.entries.is_empty() {
-            panic!("Cannot get dimension of empty index");
-        }
         self.dim
     }
 
