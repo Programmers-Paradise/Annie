@@ -44,14 +44,13 @@ pub struct CosineDistance;
 
 impl DistanceFunction for CosineDistance {
     fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
-        fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
-            let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
-            let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-            let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-            if norm_a == 0.0 || norm_b == 0.0 {
-                return 1.0; // Maximum distance
-            }
-            1.0 - dot_product / (norm_a * norm_b)
+        let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
+        let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+        let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+        if norm_a == 0.0 || norm_b == 0.0 {
+            return 1.0; // Maximum distance
+        }
+        1.0 - dot_product / (norm_a * norm_b)
         }
     
     fn name(&self) -> &str {
