@@ -6,7 +6,7 @@ The `PyHnswIndex` class provides approximate nearest neighbor search using Hiera
 ## Constructor
 
 ### `PyHnswIndex(dims: int)`
-Creates a new HNSW index.
+Creates a new HNSW index initialized with the Euclidean distance metric.
 
 - `dims` (int): Vector dimension
 
@@ -39,10 +39,13 @@ The `HnswIndex` struct now includes a `user_ids` field, which stores user-define
 ### `py_annindex` Macro
 The `py_annindex` macro is used to automatically generate Python bindings for the HNSW index. It simplifies the creation of Python classes from Rust structs, ensuring that the HNSW index can be easily used within Python environments.
 
+### Pluggable Distance Metric Registry
+The library now supports a pluggable distance metric registry, allowing users to register custom distance metrics for use in the index. This feature enhances flexibility in defining how distances between vectors are calculated.
+
 ## Example
 ```python
 import numpy as np
-from rust_annie import PyHnswIndex
+from rust_annie import PyHnswIndex, register_metric, list_metrics
 
 # Create index
 index = PyHnswIndex(dims=128)
@@ -55,6 +58,15 @@ index.add(data, ids)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids = index.search(query, k=10)
+
+# Register a custom distance metric
+def custom_metric(a, b):
+    return np.sum(np.abs(a - b) ** 1.5) ** (1.0 / 1.5)
+
+register_metric("custom_metric", custom_metric)
+
+# List available metrics
+print(list_metrics())
 ```
 
 ![Annie](https://github.com/Programmers-Paradise/.github/blob/main/ChatGPT%20Image%20May%2015,%202025,%2003_58_16%20PM.png?raw=true)
@@ -90,7 +102,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and custom metrics
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
@@ -266,7 +278,7 @@ You’ll find:
 
 - **Constructor**: `AnnIndex(dims: int, distance: Distance)`
 - **Methods**: `add`, `search`, `search_batch`, `save`, `load`
-- **Distance Metrics**: Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`
+- **Distance Metrics**: Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, and custom metrics
 
 ### ThreadSafeAnnIndex
 
