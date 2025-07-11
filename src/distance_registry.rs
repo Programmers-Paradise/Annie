@@ -203,7 +203,7 @@ pub fn list_distance_metrics() -> Vec<String> {
 }
 
 pub fn init_distance_registry() {
-    // No longer needed; registry is initialized on first use
+    // Registry is initialized on first use; function retained for backward compatibility
 }
 
 
