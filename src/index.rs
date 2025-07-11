@@ -85,8 +85,41 @@ impl AnnIndex {
         }
         Ok(AnnIndex {
             dim,
-            metric: Distance::Euclidean, // placeholder
+            metric: Distance::Euclidean(), // placeholder
             minkowski_p: Some(p),
+            entries: Vec::new(),
+        })
+    }
+
+    #[staticmethod]
+    /// Create a new index using a custom distance metric by name.
+    /// 
+    /// Args:
+    ///     dim (int): Vector dimension. Must be greater than 0.
+    ///     metric_name (str): Name of the distance metric to use.
+    ///                       Can be built-in ("euclidean", "cosine", "manhattan", "chebyshev")
+    ///                       or a custom metric registered via register_metric().
+    ///
+    /// Returns:
+    ///     AnnIndex: A new empty index instance.
+    ///
+    /// Raises:
+    ///     RustAnnError: If dimension is 0 or invalid.
+    ///
+    /// Example:
+    ///     >>> index = AnnIndex.new_with_metric(128, "euclidean")
+    ///     >>> index = AnnIndex.new_with_metric(64, "my_custom_metric")
+    pub fn new_with_metric(dim: usize, metric_name: &str) -> PyResult<Self> {
+        if dim == 0 {
+            return Err(RustAnnError::py_err("Invalid Dimension","Dimension must be > 0"));
+        }
+        
+        let metric = Distance::new(metric_name);
+        
+        Ok(AnnIndex {
+            dim,
+            metric,
+            minkowski_p: None,
             entries: Vec::new(),
         })
     }
@@ -381,7 +414,7 @@ impl AnnIndex {
             &self.entries,
             q,
             q_sq,
-            self.metric,
+            self.metric.clone(),
             self.minkowski_p,
             k,
         );
@@ -417,7 +450,7 @@ impl AnnBackend for AnnIndex {
             &self.entries,
             vector,
             query_sq,
-            self.metric,
+            self.metric.clone(),
             self.minkowski_p,
             k,
         );

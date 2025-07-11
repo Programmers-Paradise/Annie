@@ -1,10 +1,12 @@
 use pyo3::prelude::*;
 use pyo3::PyObject;
 
+#[allow(dead_code)]
 pub struct PythonFilter {
     callback: PyObject,
 }
 
+#[allow(dead_code)]
 impl PythonFilter {
     pub fn new(callback: PyObject) -> Self {
         PythonFilter { callback }
