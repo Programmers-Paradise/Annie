@@ -125,6 +125,8 @@ impl DistanceFunction for PythonDistanceFunction {
         Python::with_gil(|py| {
             let a_py = pyo3::types::PyList::new(py, a);
             let b_py = pyo3::types::PyList::new(py, b);
+            // Consider caching or reusing Python objects for repeated calls if the same vectors are used frequently, or using a more efficient data transfer method (e.g., numpy arrays) for large vectors.
+
             
             match self.python_func.call1(py, (a_py, b_py)) {
                 Ok(result) => result.extract::<f32>(py).unwrap_or(f32::NAN),
