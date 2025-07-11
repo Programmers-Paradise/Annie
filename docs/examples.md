@@ -111,6 +111,32 @@ query = np.random.rand(64).astype(np.float32)
 ids, dists = index.search(query, k=5)
 ```
 
+## Custom Metrics
+```python
+from rust_annie import AnnIndex, register_metric, list_metrics
+
+# Define a custom distance function
+def l1_5_distance(a, b):
+    return np.sum(np.abs(np.array(a) - np.array(b)) ** 1.5) ** (1.0 / 1.5)
+
+# Register the custom metric
+register_metric("l1_5", l1_5_distance)
+
+# List available metrics
+print("Available metrics:", list_metrics())
+
+# Create index with custom metric
+index = AnnIndex.new_with_metric(2, "l1_5")
+data = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+ids = np.array([0, 1], dtype=np.int64)
+index.add(data, ids)
+
+# Search using the custom metric
+query = np.array([1.5, 2.5], dtype=np.float32)
+labels, distances = index.search(query, k=1)
+print("Nearest neighbor:", labels, distances)
+```
+
 ## Fuzz Testing
 Fuzz testing has been integrated to ensure robustness against unexpected inputs. The fuzz targets focus on distance calculations and other critical components.
 
@@ -162,6 +188,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
    - [Brute-Force Index](#brute-force-index)  
    - [HNSW Index](#hnsw-index)  
    - [Thread-Safe Index](#thread-safe-index)  
+   - [Custom Metrics](#custom-metrics)
    - [Fuzz Testing](#fuzz-testing)
    - [Benchmarking](#benchmarking)
 5. [Benchmark Results](#benchmark-results)  
@@ -177,7 +204,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and Custom
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
@@ -332,6 +359,32 @@ filtered_ids, filtered_dists = index.search_filter_py(
 print(filtered_ids)  # [10, 30] (20 is filtered out)
 ```
 
+### Custom Metrics
+```python
+from rust_annie import AnnIndex, register_metric, list_metrics
+
+# Define a custom distance function
+def l1_5_distance(a, b):
+    return np.sum(np.abs(np.array(a) - np.array(b)) ** 1.5) ** (1.0 / 1.5)
+
+# Register the custom metric
+register_metric("l1_5", l1_5_distance)
+
+# List available metrics
+print("Available metrics:", list_metrics())
+
+# Create index with custom metric
+index = AnnIndex.new_with_metric(2, "l1_5")
+data = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+ids = np.array([0, 1], dtype=np.int64)
+index.add(data, ids)
+
+# Search using the custom metric
+query = np.array([1.5, 2.5], dtype=np.float32)
+labels, distances = index.search(query, k=1)
+print("Nearest neighbor:", labels, distances)
+```
+
 ## Build and Query a Brute-Force AnnIndex in Python (Complete Example)
 
 This section demonstrates a complete, beginner-friendly example of how to build and query a `brute-force AnnIndex` using Python.
@@ -356,7 +409,7 @@ You’ll find:
 
 Create a brute-force k-NN index.
 
-Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`
+Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, `Distance.custom(name)`
 
 ### ThreadSafeAnnIndex
 
@@ -381,6 +434,7 @@ Same API as `AnnIndex`, safe for concurrent use.
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
 | save(path)                            | Save index to disk                         | 
 | load(path)                            | Load index from disk                       | 
+| new_with_metric(dim, metric_name)     | Create index with custom metric            |
 
 ## Development & CI
 
