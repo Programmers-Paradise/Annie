@@ -129,10 +129,16 @@ impl DistanceFunction for PythonDistanceFunction {
 
             
             match self.python_func.call1(py, (a_py, b_py)) {
-                Ok(result) => result.extract::<f32>(py).unwrap_or(f32::NAN),
-            
-            match self.python_func.call1(py, (a_py, b_py)) {
-                Ok(result) => result.extract::<f32>(py).unwrap_or(f32::NAN),
+                Ok(result) => {
+                    let val = result.extract::<f32>(py).unwrap_or(f32::NAN);
+                    if val.is_finite() && val >= 0.0 {
+                        val
+                    } else {
+                        f32::NAN
+                    }
+                },
+                Err(_) => f32::NAN,
+            }
                 Err(_) => f32::NAN,
             }
         })
