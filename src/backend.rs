@@ -14,6 +14,8 @@ pub trait AnnBackend {
     fn search(&self, vector: &[f32], k: usize) -> Vec<usize>;
 
     fn save(&self, path: &str);
+    
+    #[allow(dead_code)]
     fn load(path: &str) -> Self
     where
         Self: Sized;

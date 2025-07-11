@@ -1,4 +1,5 @@
 use crate::metrics::Distance;
+use crate::distance_registry::get_distance_function;
 
 pub fn compute_distances_with_ids(
     entries: &[(i64, Vec<f32>, f32)],
@@ -18,14 +19,23 @@ pub fn compute_distances_with_ids(
                     .sum::<f32>()
                     .powf(1.0 / p)
             } else {
-                match metric {
-                    Distance::Euclidean => ((vec_sq + query_sq_norm - 2.0 * dot(vec, query)).max(0.0)).sqrt(),
-                    Distance::Cosine => {
+                match &metric {
+                    Distance::Euclidean() => ((vec_sq + query_sq_norm - 2.0 * dot(vec, query)).max(0.0)).sqrt(),
+                    Distance::Cosine() => {
                         let denom = vec_sq.sqrt().max(1e-12) * query_sq_norm.sqrt().max(1e-12);
                         (1.0 - dot(vec, query) / denom).max(0.0)
                     }
-                    Distance::Manhattan => vec.iter().zip(query).map(|(x, y)| (x - y).abs()).sum(),
-                    Distance::Chebyshev => vec.iter().zip(query).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max),
+                    Distance::Manhattan() => vec.iter().zip(query).map(|(x, y)| (x - y).abs()).sum(),
+                    Distance::Chebyshev() => vec.iter().zip(query).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max),
+                    Distance::Custom(name) => {
+                        // Use the registry to get the custom distance function
+                        if let Some(distance_func) = get_distance_function(name) {
+                            distance_func.distance(vec, query)
+                        } else {
+                            // Fall back to Euclidean distance if custom function not found
+                            ((vec_sq + query_sq_norm - 2.0 * dot(vec, query)).max(0.0)).sqrt()
+                        }
+                    }
                 }
             };
             (*id, dist)
@@ -37,7 +47,6 @@ pub fn compute_distances_with_ids(
     if k == 0 {
         return (vec![], vec![]);
     }
-    println!("entries: {}, k requested: {}", results.len(), k);
 
     let count = results.len().min(k);
     if count > 0 {
