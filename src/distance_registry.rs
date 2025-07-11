@@ -177,39 +177,31 @@ impl DistanceRegistry {
 }
 
 /// Global distance registry instance.
-static DISTANCE_REGISTRY: Mutex<Option<DistanceRegistry>> = Mutex::new(None);
+use once_cell::sync::Lazy;
+use std::sync::RwLock;
 
-/// Initialize the global distance registry.
-pub fn init_distance_registry() {
-    let mut registry = DISTANCE_REGISTRY.lock().unwrap();
-    if registry.is_none() {
-        *registry = Some(DistanceRegistry::new());
-    }
-}
+static DISTANCE_REGISTRY: Lazy<RwLock<DistanceRegistry>> = Lazy::new(|| RwLock::new(DistanceRegistry::new()));
 
-/// Register a custom distance function.
 pub fn register_distance_function(name: &str, func: Box<dyn DistanceFunction>) -> Result<(), String> {
-    let mut registry_guard = DISTANCE_REGISTRY.lock().unwrap();
-    match registry_guard.as_mut() {
-        Some(registry) => {
-            registry.register(name, func);
-            Ok(())
-        }
-        None => Err("Distance registry not initialized".to_string()),
-    }
+    let mut registry = DISTANCE_REGISTRY.write().unwrap();
+    registry.register(name, func);
+    Ok(())
 }
 
-/// Get a distance function by name.
 pub fn get_distance_function(name: &str) -> Option<Box<dyn DistanceFunction>> {
-    let registry_guard = DISTANCE_REGISTRY.lock().unwrap();
-    registry_guard.as_ref()?.get(name)
+    let registry = DISTANCE_REGISTRY.read().unwrap();
+    registry.get(name)
 }
 
-/// List all available distance metrics.
 pub fn list_distance_metrics() -> Vec<String> {
-    let registry_guard = DISTANCE_REGISTRY.lock().unwrap();
-    registry_guard.as_ref().map(|r| r.list_metrics()).unwrap_or_default()
+    let registry = DISTANCE_REGISTRY.read().unwrap();
+    registry.list_metrics()
 }
+
+pub fn init_distance_registry() {
+    // No longer needed; registry is initialized on first use
+}
+
 
 /// Python function to register a custom distance metric.
 #[pyfunction]
