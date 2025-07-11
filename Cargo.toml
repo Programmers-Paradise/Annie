@@ -26,7 +26,7 @@ cuda = ["cust"]
 rocm = ["hip-rs"]
 
 [workspace]
-members = [".", "rust_annie_macros/foo"]
+members = [".", "fuzz", "rust_annie_macros/foo"]
 
 [dev-dependencies]
 criterion = "0.5"

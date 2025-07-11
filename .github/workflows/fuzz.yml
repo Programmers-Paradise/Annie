@@ -1,0 +1,34 @@
+name: Fuzz Testing
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Rust nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: rust-src
+          override: true
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Build fuzz target
+        working-directory: fuzz
+        run: cargo fuzz build distances
+
+      - name: Run fuzz tests for 60 seconds
+        working-directory: fuzz
+        run: cargo fuzz run distances -- -max_total_time=60
+        env:
+          RUSTFLAGS: -C debug-assertions=no
+          RUST_BACKTRACE: full
