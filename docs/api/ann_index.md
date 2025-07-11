@@ -33,6 +33,20 @@ index = AnnIndex.new_minkowski(128, 1.5)
 index = AnnIndex.new_minkowski(64, 3.0)
 ```
 
+### `new_with_metric(dim: int, metric_name: str)`
+Creates a new index using a custom distance metric by name.
+
+- `dim` (int): Vector dimension. Must be greater than 0.
+- `metric_name` (str): Name of the distance metric to use. Can be built-in ("euclidean", "cosine", "manhattan", "chebyshev") or a custom metric registered via `register_metric()`.
+- Returns: `AnnIndex`: A new empty index instance.
+- Raises: `RustAnnError`: If dimension is 0 or invalid.
+
+Example:
+```python
+index = AnnIndex.new_with_metric(128, "euclidean")
+index = AnnIndex.new_with_metric(64, "my_custom_metric")
+```
+
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
@@ -203,7 +217,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and custom metrics
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
@@ -374,6 +388,31 @@ filtered_ids, filtered_dists = index.search_filter_py(
     filter_fn=even_ids
 )
 print(filtered_ids)  # [10, 30] (20 is filtered out)
+```
+
+### Custom Distance Metrics
+```python
+from rust_annie import AnnIndex, register_metric, list_metrics
+import numpy as np
+
+# Register a custom L1.5 distance metric
+def l1_5_distance(a, b):
+    return np.sum(np.abs(np.array(a) - np.array(b)) ** 1.5) ** (1.0 / 1.5)
+
+register_metric("l1_5", l1_5_distance)
+
+# Create index with custom metric
+index = AnnIndex.new_with_metric(2, "l1_5")
+
+# Add data
+data = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+ids = np.array([0, 1], dtype=np.int64)
+index.add(data, ids)
+
+# Search
+query = np.array([1.5, 2.5], dtype=np.float32)
+labels, distances = index.search(query, k=1)
+print(labels, distances)
 ```
 
 ## Build and Query a Brute-Force AnnIndex in Python (Complete Example)
