@@ -47,6 +47,7 @@ impl DistanceFunction for CosineDistance {
         if a.len() != b.len() {
             panic!("CosineDistance: input slices must have the same length");
         }
+        // Precompute and cache norms outside this function if possible for repeated queries
         let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
         let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
         let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
