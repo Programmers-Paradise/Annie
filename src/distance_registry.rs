@@ -134,15 +134,12 @@ impl DistanceFunction for PythonDistanceFunction {
             
             match self.python_func.call1(py, (a_py, b_py)) {
                 Ok(result) => {
-                    let val = result.extract::<f32>(py).unwrap_or(f32::NAN);
-                    if val.is_finite() && val >= 0.0 {
-                        val
-                    } else {
-                        f32::NAN
+                    match result.extract::<f32>(py) {
+                        Ok(val) if val.is_finite() && val >= 0.0 => val,
+                        _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Custom metric must return a non-negative finite float")),
                     }
                 },
-                Err(_) => f32::NAN,
-            }
+                Err(e) => return Err(e),
                 Err(_) => f32::NAN,
             }
         })
