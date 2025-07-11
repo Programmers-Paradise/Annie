@@ -44,17 +44,13 @@ pub struct CosineDistance;
 
 impl DistanceFunction for CosineDistance {
     fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
-        if a.len() != b.len() {
-            panic!("CosineDistance: input slices must have the same length");
-        }
-        // Precompute and cache norms outside this function if possible for repeated queries
         let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
-        let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
-        let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+        let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>();
+        let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>();
         if norm_a == 0.0 || norm_b == 0.0 {
             return 1.0; // Maximum distance
         }
-        1.0 - dot_product / (norm_a * norm_b)
+        1.0 - dot_product / (norm_a * norm_b).sqrt()
     }
     
     fn name(&self) -> &str {
@@ -126,20 +122,13 @@ impl PythonDistanceFunction {
 }
 
 impl DistanceFunction for PythonDistanceFunction {
+    fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
         Python::with_gil(|py| {
-            let a_py = pyo3::types::PyList::new(py, a);
-            let b_py = pyo3::types::PyList::new(py, b);
-            // Consider caching or reusing Python objects for repeated calls if the same vectors are used frequently, or using a more efficient data transfer method (e.g., numpy arrays) for large vectors.
-
+            let a_py = a.into_pyobject(py).expect("Failed to convert vector a to Python");
+            let b_py = b.into_pyobject(py).expect("Failed to convert vector b to Python");
             
             match self.python_func.call1(py, (a_py, b_py)) {
-                Ok(result) => {
-                    match result.extract::<f32>(py) {
-                        Ok(val) if val.is_finite() && val >= 0.0 => val,
-                        _ => return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Custom metric must return a non-negative finite float")),
-                    }
-                },
-                Err(e) => return Err(e),
+                Ok(result) => result.extract::<f32>(py).unwrap_or(f32::NAN),
                 Err(_) => f32::NAN,
             }
         })
@@ -188,31 +177,39 @@ impl DistanceRegistry {
 }
 
 /// Global distance registry instance.
-use once_cell::sync::Lazy;
-use std::sync::RwLock;
+static DISTANCE_REGISTRY: Mutex<Option<DistanceRegistry>> = Mutex::new(None);
 
-static DISTANCE_REGISTRY: Lazy<RwLock<DistanceRegistry>> = Lazy::new(|| RwLock::new(DistanceRegistry::new()));
-
-pub fn register_distance_function(name: &str, func: Box<dyn DistanceFunction>) -> Result<(), String> {
-    let mut registry = DISTANCE_REGISTRY.write().unwrap();
-    registry.register(name, func);
-    Ok(())
-}
-
-pub fn get_distance_function(name: &str) -> Option<Box<dyn DistanceFunction>> {
-    let registry = DISTANCE_REGISTRY.read().unwrap();
-    registry.get(name)
-}
-
-pub fn list_distance_metrics() -> Vec<String> {
-    let registry = DISTANCE_REGISTRY.read().unwrap();
-    registry.list_metrics()
-}
-
+/// Initialize the global distance registry.
 pub fn init_distance_registry() {
-    // Registry is initialized on first use; function retained for backward compatibility
+    let mut registry = DISTANCE_REGISTRY.lock().unwrap();
+    if registry.is_none() {
+        *registry = Some(DistanceRegistry::new());
+    }
 }
 
+/// Register a custom distance function.
+pub fn register_distance_function(name: &str, func: Box<dyn DistanceFunction>) -> Result<(), String> {
+    let mut registry_guard = DISTANCE_REGISTRY.lock().unwrap();
+    match registry_guard.as_mut() {
+        Some(registry) => {
+            registry.register(name, func);
+            Ok(())
+        }
+        None => Err("Distance registry not initialized".to_string()),
+    }
+}
+
+/// Get a distance function by name.
+pub fn get_distance_function(name: &str) -> Option<Box<dyn DistanceFunction>> {
+    let registry_guard = DISTANCE_REGISTRY.lock().unwrap();
+    registry_guard.as_ref()?.get(name)
+}
+
+/// List all available distance metrics.
+pub fn list_distance_metrics() -> Vec<String> {
+    let registry_guard = DISTANCE_REGISTRY.lock().unwrap();
+    registry_guard.as_ref().map(|r| r.list_metrics()).unwrap_or_default()
+}
 
 /// Python function to register a custom distance metric.
 #[pyfunction]
