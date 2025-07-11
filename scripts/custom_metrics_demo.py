@@ -19,7 +19,10 @@ def main():
     
     def l1_5_distance(a, b):
         """L1.5 norm distance (between Manhattan and Euclidean)"""
-        return np.sum(np.abs(np.array(a) - np.array(b)) ** 1.5) ** (1.0 / 1.5)
+        a = np.asarray(a)
+        b = np.asarray(b)
+        return np.sum(np.abs(a - b) ** 1.5) ** (1.0 / 1.5)
+
     
     register_metric("l1_5", l1_5_distance)
     print("   Registered 'l1_5' metric")
