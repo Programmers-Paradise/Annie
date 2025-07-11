@@ -21,6 +21,8 @@ def main():
         """L1.5 norm distance (between Manhattan and Euclidean)"""
         a = np.asarray(a)
         b = np.asarray(b)
+        if a.shape != b.shape:
+            raise ValueError(f"Input arrays must have the same shape, got {a.shape} and {b.shape}")
         return np.sum(np.abs(a - b) ** 1.5) ** (1.0 / 1.5)
 
     
