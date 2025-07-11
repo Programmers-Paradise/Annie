@@ -38,14 +38,17 @@ def main():
     
     def mahalanobis_distance(a, b):
         """Mahalanobis distance using predefined covariance matrix"""
-    a_arr = np.array(a)
-    b_arr = np.array(b)
-    if a_arr.shape != b_arr.shape:
-        raise ValueError(f"Input vectors must have the same shape, got {a_arr.shape} and {b_arr.shape}")
-    diff = a_arr - b_arr
-    if diff.shape[0] != cov_inv.shape[0]:
-        raise ValueError(f"Input vectors must have dimension {cov_inv.shape[0]}, got {diff.shape[0]}")
-    return np.sqrt(np.dot(diff, np.dot(cov_inv, diff)))
+        global cov_inv
+        if 'cov_inv' not in globals():
+            raise RuntimeError("cov_inv must be defined globally before using mahalanobis_distance.")
+        a_arr = np.array(a)
+        b_arr = np.array(b)
+        if a_arr.shape != b_arr.shape:
+            raise ValueError(f"Input vectors must have the same shape, got {a_arr.shape} and {b_arr.shape}")
+        diff = a_arr - b_arr
+        if diff.shape[0] != cov_inv.shape[0]:
+            raise ValueError(f"Input vectors must have dimension {cov_inv.shape[0]}, got {diff.shape[0]}")
+        return np.sqrt(np.dot(diff, np.dot(cov_inv, diff)))
     
     register_metric("mahalanobis", mahalanobis_distance)
     print("   Registered 'mahalanobis' metric")
