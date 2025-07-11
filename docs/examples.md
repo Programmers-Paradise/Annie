@@ -125,6 +125,21 @@ cd fuzz
 cargo fuzz run distances -- -max_total_time=60
 ```
 
+## Benchmarking
+
+The new benchmarking code allows for performance comparisons between brute force and HNSW methods. The benchmarks are implemented using the `criterion` crate and can be executed to measure the performance of different indexing methods.
+
+### Running Benchmarks
+To run the benchmarks, ensure you have `criterion` installed and execute the following commands:
+
+```bash
+# Navigate to the benchmarks directory
+cd benches
+
+# Run the benchmarks
+cargo bench
+```
+
 # README
 
 ![Annie](https://github.com/Programmers-Paradise/.github/blob/main/ChatGPT%20Image%20May%2015,%202025,%2003_58_16%20PM.png?raw=true)
@@ -148,6 +163,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
    - [HNSW Index](#hnsw-index)  
    - [Thread-Safe Index](#thread-safe-index)  
    - [Fuzz Testing](#fuzz-testing)
+   - [Benchmarking](#benchmarking)
 5. [Benchmark Results](#benchmark-results)  
 6. [API Reference](#api-reference)  
 7. [Development & CI](#development--ci)  
@@ -171,6 +187,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Multi-platform** support (Linux, Windows, macOS)
 - **Automated CI** with performance tracking
 - **Fuzz Testing** for robustness against unexpected inputs
+- **Benchmarking** for performance comparison between methods
 
 ## Installation
 
