@@ -44,6 +44,9 @@ pub struct CosineDistance;
 
 impl DistanceFunction for CosineDistance {
     fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
+        if a.len() != b.len() {
+            panic!("CosineDistance: input slices must have the same length");
+        }
         let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
         let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
         let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
@@ -51,7 +54,7 @@ impl DistanceFunction for CosineDistance {
             return 1.0; // Maximum distance
         }
         1.0 - dot_product / (norm_a * norm_b)
-        }
+    }
     
     fn name(&self) -> &str {
         "cosine"
