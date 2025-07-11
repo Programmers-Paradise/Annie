@@ -45,7 +45,7 @@ pub struct CosineDistance;
 impl DistanceFunction for CosineDistance {
     fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
         if a.len() != b.len() {
-            panic!("CosineDistance: input slices must have the same length");
+            return 1.0; // or another maximum distance value, but do not panic
         }
         // Precompute and cache norms outside this function if possible for repeated queries
         let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
