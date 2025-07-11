@@ -10,6 +10,7 @@ pub mod hnsw_index;
 mod index_enum;
 mod filters;
 pub mod distance_registry;
+pub mod monitoring;
 
 // Add GPU module
 #[cfg(any(feature = "cuda", feature = "rocm"))]
@@ -24,6 +25,7 @@ use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
 use crate::distance_registry::{register_metric, list_metrics, init_distance_registry};
+use crate::monitoring::PyMetricsCollector;
 use pyo3::Bound;
 use pyo3::types::PyModule;
 
@@ -110,6 +112,7 @@ fn rust_annie(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ThreadSafeAnnIndex>()?;
     m.add_class::<PyHnswIndex>()?;
     m.add_class::<PyIndex>()?;
+    m.add_class::<PyMetricsCollector>()?;
     m.add_function(wrap_pyfunction!(register_metric, m)?)?;
     m.add_function(wrap_pyfunction!(list_metrics, m)?)?;
     Ok(())
