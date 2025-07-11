@@ -4,7 +4,6 @@
 
 
 [![PyPI](https://img.shields.io/pypi/v/rust-annie.svg)](https://pypi.org/project/rust-annie)  
-[![CI Status](https://img.shields.io/github/actions/workflow/status/Programmers-Paradise/Annie/ci.yml?branch=main&label=CI)](https://github.com/Programmers-Paradise/Annie/blob/main/.github/workflows/CI.yml)
 [![CodeQL](https://img.shields.io/github/actions/workflow/status/Programmers-Paradise/Annie/codeql.yml?branch=main&label=CodeQL)](https://github.com/Programmers-Paradise/Annie/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Benchmark](https://img.shields.io/badge/benchmark-online-blue.svg)](https://programmers-paradise.github.io/Annie/)
