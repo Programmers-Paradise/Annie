@@ -3,11 +3,14 @@ use numpy::{PyReadonlyArray1, PyReadonlyArray2, IntoPyArray};
 use ndarray::Array2;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
+use std::sync::Arc;
+use std::time::Instant;
 
 use crate::backend::AnnBackend;  //new added
 use crate::storage::{save_index, load_index};
 use crate::metrics::Distance;
 use crate::errors::RustAnnError;
+use crate::monitoring::MetricsCollector;
 
 #[pyclass]
 #[derive(Serialize, Deserialize)]
@@ -23,6 +26,9 @@ pub struct AnnIndex {
     minkowski_p: Option<f32>,
     /// Stored entries as (id, vector, squared_norm) tuples.
     entries: Vec<(i64, Vec<f32>, f32)>,
+    /// Optional metrics collector for monitoring
+    #[serde(skip)]
+    metrics: Option<Arc<MetricsCollector>>,
 }
 
 #[pymethods]
@@ -55,6 +61,7 @@ impl AnnIndex {
             metric,
             minkowski_p: None,
             entries: Vec::new(),
+            metrics: None,
         })
     }
 
@@ -88,6 +95,7 @@ impl AnnIndex {
             metric: Distance::Euclidean(), // placeholder
             minkowski_p: Some(p),
             entries: Vec::new(),
+            metrics: None,
         })
     }
 
@@ -121,6 +129,7 @@ impl AnnIndex {
             metric,
             minkowski_p: None,
             entries: Vec::new(),
+            metrics: None,
         })
     }
 
@@ -163,6 +172,23 @@ impl AnnIndex {
             let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
             self.entries.push((id, v, sq_norm));
         }
+        
+        // Update metrics if enabled
+        if let Some(metrics) = &self.metrics {
+            let metric_name = if let Some(p) = self.minkowski_p {
+                format!("minkowski_p{}", p)
+            } else {
+                match &self.metric {
+                    Distance::Euclidean() => "euclidean".to_string(),
+                    Distance::Cosine() => "cosine".to_string(),
+                    Distance::Manhattan() => "manhattan".to_string(),
+                    Distance::Chebyshev() => "chebyshev".to_string(),
+                    Distance::Custom(name) => name.clone(),
+                }
+            };
+            metrics.set_index_metadata(self.entries.len(), self.dim, &metric_name);
+        }
+        
         Ok(())
     }
 
@@ -217,11 +243,19 @@ impl AnnIndex {
         let q = query.as_slice()?;
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
 
+        // Record query start time for metrics
+        let start_time = Instant::now();
+
         // Release the GIL for the heavy compute:
         let result: PyResult<(Vec<i64>, Vec<f32>)> = py.allow_threads(|| {
             self.inner_search(q, q_sq, k)
         });
         let (ids, dists) = result?;
+
+        // Record query latency
+        if let Some(metrics) = &self.metrics {
+            metrics.record_query(start_time.elapsed());
+        }
 
         Ok((
             ids.into_pyarray(py).into(),
@@ -399,6 +433,94 @@ impl AnnIndex {
         format!("AnnIndex(dim={}, metric={}, entries={})", 
                 self.dim, metric_str, self.entries.len())
     }
+
+    /// Enable metrics collection for this index.
+    /// 
+    /// Args:
+    ///     port (int): Port number to serve metrics on (default: 8000).
+    ///
+    /// Example:
+    ///     >>> index.enable_metrics(8080)
+    ///     >>> # Metrics will be available at http://localhost:8080/metrics
+    pub fn enable_metrics(&mut self, port: Option<u16>) -> PyResult<()> {
+        let metrics = Arc::new(MetricsCollector::new());
+        
+        // Update initial metadata
+        let metric_name = if let Some(p) = self.minkowski_p {
+            format!("minkowski_p{}", p)
+        } else {
+            match &self.metric {
+                Distance::Euclidean() => "euclidean".to_string(),
+                Distance::Cosine() => "cosine".to_string(),
+                Distance::Manhattan() => "manhattan".to_string(),
+                Distance::Chebyshev() => "chebyshev".to_string(),
+                Distance::Custom(name) => name.clone(),
+            }
+        };
+        
+        metrics.set_index_metadata(self.entries.len(), self.dim, &metric_name);
+        
+        // Start metrics server if port is specified
+        if let Some(port) = port {
+            use crate::monitoring::MetricsServer;
+            let server = MetricsServer::new(Arc::clone(&metrics), port);
+            server.start().map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
+                    format!("Failed to start metrics server: {}", e)
+                )
+            })?;
+        }
+        
+        self.metrics = Some(metrics);
+        Ok(())
+    }
+
+    /// Get current metrics as a Python dictionary.
+    /// 
+    /// Returns:
+    ///     dict: Dictionary containing current metrics.
+    ///
+    /// Example:
+    ///     >>> metrics = index.get_metrics()
+    ///     >>> print(f"Query count: {metrics['query_count']}")
+    pub fn get_metrics(&self) -> PyResult<Option<PyObject>> {
+        if let Some(metrics) = &self.metrics {
+            let snapshot = metrics.get_metrics_snapshot();
+            Python::with_gil(|py| {
+                let dict = pyo3::types::PyDict::new(py);
+                dict.set_item("query_count", snapshot.query_count)?;
+                dict.set_item("avg_query_latency_us", snapshot.avg_query_latency_us)?;
+                dict.set_item("index_size", snapshot.index_size)?;
+                dict.set_item("dimensions", snapshot.dimensions)?;
+                dict.set_item("uptime_seconds", snapshot.uptime_seconds)?;
+                dict.set_item("distance_metric", snapshot.distance_metric)?;
+                
+                // Convert recall estimates to Python dict
+                let recall_dict = pyo3::types::PyDict::new(py);
+                // In the simplified version, we don't store recall estimates
+                dict.set_item("recall_estimates", recall_dict)?;
+                
+                Ok(Some(dict.into()))
+            })
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update recall estimate for a specific k value.
+    /// 
+    /// Args:
+    ///     k (int): The k value for which to update recall.
+    ///     recall (float): The estimated recall value (0.0 to 1.0).
+    ///
+    /// Example:
+    ///     >>> index.update_recall_estimate(10, 0.95)
+    pub fn update_recall_estimate(&self, k: usize, recall: f64) -> PyResult<()> {
+        if let Some(metrics) = &self.metrics {
+            metrics.update_recall_estimate(k, recall);
+        }
+        Ok(())
+    }
 }
 
 impl AnnIndex {
@@ -430,6 +552,7 @@ impl AnnBackend for AnnIndex {
             metric,
             minkowski_p: None,
             entries: Vec::new(),
+            metrics: None,
         }
     }
 
