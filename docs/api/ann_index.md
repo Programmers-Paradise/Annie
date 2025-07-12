@@ -190,6 +190,48 @@ print(index)
 AnnIndex(dim=128, metric=Euclidean, entries=1000)
 ```
 
+### `enable_metrics(port: int = None)`
+Enable metrics collection for the index.
+
+- `port` (int, optional): Port number for HTTP metrics server. If provided, starts an HTTP server.
+
+Example:
+```python
+index.enable_metrics(8000)  # Start server on port 8000
+index.enable_metrics()      # Enable metrics without HTTP server
+```
+
+### `get_metrics() -> dict`
+Get current metrics as a Python dictionary.
+
+- Returns: dict: Dictionary containing current metrics.
+
+Example:
+```python
+metrics = index.get_metrics()
+# Returns:
+# {
+#     'query_count': 150,
+#     'avg_query_latency_us': 45.2,
+#     'index_size': 1000,
+#     'dimensions': 128,
+#     'distance_metric': 'euclidean',
+#     'uptime_seconds': 300,
+#     'recall_estimates': {}
+# }
+```
+
+### `update_recall_estimate(k: int, recall: float)`
+Update recall estimate for a specific k value.
+
+- `k` (int): The k value for nearest neighbor search
+- `recall` (float): Estimated recall value (0.0 to 1.0)
+
+Example:
+```python
+index.update_recall_estimate(10, 0.95)  # 95% recall for k=10
+```
+
 ## Example
 ```python
 import numpy as np
@@ -226,6 +268,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **GPU Acceleration** for brute-force calculations
 - **Multi-platform** support (Linux, Windows, macOS)
 - **Automated CI** with performance tracking
+- **Real-time Metrics**: Query latency and index statistics with Prometheus integration
 
 ## Installation
 
@@ -415,6 +458,39 @@ labels, distances = index.search(query, k=1)
 print(labels, distances)
 ```
 
+### Metrics and Monitoring
+```python
+import numpy as np
+from rust_annie import AnnIndex, Distance
+
+# Create an index
+index = AnnIndex(128, Distance.EUCLIDEAN)
+
+# Enable metrics with HTTP server on port 8000
+index.enable_metrics(8000)
+
+# Add some data
+data = np.random.random((1000, 128)).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+index.add(data, ids)
+
+# Run queries (metrics collected automatically)
+query = np.random.random(128).astype(np.float32)
+labels, distances = index.search(query, k=10)
+
+# Check current metrics
+metrics = index.get_metrics()
+print(f"Query count: {metrics['query_count']}")
+print(f"Average latency: {metrics['avg_query_latency_us']} μs")
+
+# Access metrics via HTTP
+# Get Prometheus format metrics
+# curl http://localhost:8000/metrics
+
+# Health check
+# curl http://localhost:8000/health
+```
+
 ## Build and Query a Brute-Force AnnIndex in Python (Complete Example)
 
 This section demonstrates a complete, beginner-friendly example of how to build and query a `brute-force AnnIndex` using Python.
@@ -459,6 +535,9 @@ You’ll find:
 | dim()                                 | Get the dimension of vectors in the index  |
 | save(path)                            | Save index to disk                         | 
 | load(path)                            | Load index from disk                       | 
+| enable_metrics(port)                  | Enable metrics collection                  |
+| get_metrics()                         | Retrieve current metrics                   |
+| update_recall_estimate(k, recall)     | Update recall estimate for a specific k    |
 
 ## Development & CI
 
