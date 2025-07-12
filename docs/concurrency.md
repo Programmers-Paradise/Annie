@@ -206,6 +206,11 @@ Creates a new thread-safe index.
 - `dim` (int): Vector dimension
 - `metric` (Distance): Distance metric
 
+### `from_arc(inner: Arc<RwLock<AnnIndex>>) -> ThreadSafeAnnIndex`
+Internal constructor for testing: wraps an existing `Arc<RwLock<AnnIndex>>`.
+
+- `inner` (Arc<RwLock<AnnIndex>>): The internal index wrapped in a thread-safe lock.
+
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
