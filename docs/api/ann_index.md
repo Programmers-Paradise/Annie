@@ -8,15 +8,15 @@ The `AnnIndex` class provides efficient brute-force nearest neighbor search with
 Creates a new brute-force index for unit-variant metrics (Euclidean, Cosine, Manhattan, Chebyshev).
 
 - `dim` (int): Vector dimension. Must be greater than 0.
-- `metric` (Distance): Distance metric to use for similarity computation. Options: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`.
+- `metric` (Distance): Distance metric to use for similarity computation. Options: `Distance.Euclidean()`, `Distance.Cosine()`, `Distance.Manhattan()`, `Distance.Chebyshev()`.
 - Returns: `AnnIndex`: A new empty index instance.
 - Raises: `RustAnnError`: If dimension is 0 or invalid.
 
 Example:
 ```python
 from annindex import AnnIndex, Distance
-index = AnnIndex(128, Distance.EUCLIDEAN)
-index = AnnIndex(256, Distance.COSINE)
+index = AnnIndex(128, Distance.Euclidean())
+index = AnnIndex(256, Distance.Cosine())
 ```
 
 ### `new_minkowski(dim: int, p: float)`
@@ -238,7 +238,7 @@ import numpy as np
 from rust_annie import AnnIndex, Distance
 
 # Create index
-index = AnnIndex(128, Distance.EUCLIDEAN)
+index = AnnIndex(128, Distance.Euclidean())
 
 # Add data
 data = np.random.rand(1000, 128).astype(np.float32)
@@ -294,7 +294,7 @@ import numpy as np
 from rust_annie import AnnIndex, Distance
 
 # Create index
-index = AnnIndex(128, Distance.EUCLIDEAN)
+index = AnnIndex(128, Distance.Euclidean())
 
 # Add data
 data = np.random.rand(1000, 128).astype(np.float32)
@@ -332,7 +332,7 @@ from rust_annie import AnnIndex, Distance
 import numpy as np
 
 # Create index
-idx = AnnIndex(4, Distance.COSINE)
+idx = AnnIndex(4, Distance.Cosine())
 
 # Add data
 data = np.random.rand(50, 4).astype(np.float32)
@@ -354,7 +354,7 @@ from rust_annie import AnnIndex, Distance
 import numpy as np
 
 # Create index
-idx = AnnIndex(16, Distance.EUCLIDEAN)
+idx = AnnIndex(16, Distance.Euclidean())
 
 # Add data
 data = np.random.rand(1000, 16).astype(np.float32)
@@ -378,7 +378,7 @@ import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 
 # Create thread-safe index
-idx = ThreadSafeAnnIndex(32, Distance.EUCLIDEAN)
+idx = ThreadSafeAnnIndex(32, Distance.Euclidean())
 
 # Add data
 data = np.random.rand(500, 32).astype(np.float32)
@@ -406,7 +406,7 @@ from rust_annie import AnnIndex, Distance
 import numpy as np
 
 # Create index
-index = AnnIndex(3, Distance.EUCLIDEAN)
+index = AnnIndex(3, Distance.Euclidean())
 data = np.array([
     [1.0, 2.0, 3.0],
     [4.0, 5.0, 6.0],
@@ -464,7 +464,7 @@ import numpy as np
 from rust_annie import AnnIndex, Distance
 
 # Create an index
-index = AnnIndex(128, Distance.EUCLIDEAN)
+index = AnnIndex(128, Distance.Euclidean())
 
 # Enable metrics with HTTP server on port 8000
 index.enable_metrics(8000)
