@@ -4,7 +4,7 @@ pub mod index;
 mod storage;
 pub mod metrics;
 mod errors;
-mod concurrency;
+pub mod concurrency;
 mod backend;
 pub mod hnsw_index;
 mod index_enum;
