@@ -79,3 +79,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\nStopping server...")
         sys.exit(0)
+    except Exception as e:
+        print(f"\n\nUnexpected error: {e}")
+        sys.exit(1)
