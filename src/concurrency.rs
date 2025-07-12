@@ -89,3 +89,10 @@ impl ThreadSafeAnnIndex {
         })
     }
 }
+
+impl ThreadSafeAnnIndex {
+    /// Internal constructor for testing: wraps an existing Arc<RwLock<AnnIndex>>.
+    pub fn from_arc(inner: Arc<RwLock<AnnIndex>>) -> Self {
+        Self { inner }
+    }
+}

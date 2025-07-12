@@ -86,7 +86,8 @@ def test_register_manhattan_clone():
     labels_custom, distances_custom = index_custom.search(query, k=3)
     
     # Results should be the same (or very close)
-    assert labels_builtin == labels_custom
+    assert np.array_equal(labels_builtin, labels_custom)
+    assert np.allclose(distances_builtin, distances_custom)
     np.testing.assert_allclose(distances_builtin, distances_custom, rtol=1e-5)
 
 def test_mahalanobis_distance():

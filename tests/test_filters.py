@@ -19,7 +19,7 @@ def sample_data():
 
 def test_add_and_search(sample_data):
     vecs, ids = sample_data
-    index = AnnIndex(dim=3, metric=Distance.Euclidean)
+    index = AnnIndex(dim=3, metric=Distance.Euclidean())
     index.add(vecs, ids)
 
     query = np.array([1.0, 2.0, 3.0], dtype=np.float32)
@@ -31,7 +31,7 @@ def test_add_and_search(sample_data):
 
 def test_batch_search(sample_data):
     vecs, ids = sample_data
-    index = AnnIndex(3, Distance.Euclidean)
+    index = AnnIndex(3, Distance.Euclidean())
     index.add(vecs, ids)
 
     queries = np.stack([vecs[0], vecs[1]])
@@ -43,7 +43,7 @@ def test_batch_search(sample_data):
 
 def test_remove(sample_data):
     vecs, ids = sample_data
-    index = AnnIndex(3, Distance.Cosine)
+    index = AnnIndex(3, Distance.Cosine())
     index.add(vecs, ids)
 
     index.remove([11, 14])
@@ -56,7 +56,7 @@ def test_remove(sample_data):
 
 def test_repr(sample_data):
     vecs, ids = sample_data
-    index = AnnIndex(3, Distance.Cosine)
+    index = AnnIndex(3, Distance.Cosine())
     index.add(vecs, ids)
 
     r = repr(index)
@@ -67,7 +67,7 @@ def test_repr(sample_data):
 
 def test_len(sample_data):
     vecs, ids = sample_data
-    index = AnnIndex(3, Distance.Euclidean)
+    index = AnnIndex(3, Distance.Euclidean())
     index.add(vecs, ids)
     assert len(index) == 6
     assert index.__len__() == 6
@@ -91,7 +91,7 @@ def test_minkowski_distance():
 
 def test_search_more_than_available(sample_data):
     vecs, ids = sample_data
-    index = AnnIndex(dim=3, metric=Distance.Euclidean)
+    index = AnnIndex(dim=3, metric=Distance.Euclidean())
     index.add(vecs, ids)
 
     query = np.array([1.0, 2.0, 3.0], dtype=np.float32)
@@ -103,7 +103,7 @@ def test_search_more_than_available(sample_data):
 
 
 def test_search_empty_index():
-    index = AnnIndex(dim=3, metric=Distance.Euclidean)
+    index = AnnIndex(dim=3, metric=Distance.Euclidean())
     query = np.array([1.0, 2.0, 3.0], dtype=np.float32)
 
     with pytest.raises(Exception, match="EmptyIndex"):

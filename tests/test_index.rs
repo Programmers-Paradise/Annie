@@ -1,12 +1,13 @@
 use rust_annie::index::AnnIndex;
 use rust_annie::metrics::Distance;
 use pyo3::Python;
+use numpy::PyArrayMethods;
 
 #[test]
 fn test_brute_backend() {
     pyo3::prepare_freethreaded_python();
     Python::with_gil(|py| {
-        let mut index = AnnIndex::new(3, Distance::Euclidean).unwrap();
+        let mut index = AnnIndex::new(3, Distance::Euclidean()).unwrap();
 
         let data = vec![
             vec![1.0, 2.0, 3.0],
@@ -37,7 +38,7 @@ fn test_brute_backend() {
 fn test_hnsw_backend() {
     pyo3::prepare_freethreaded_python();
     Python::with_gil(|py| {
-        let mut index = AnnIndex::new(3, Distance::Euclidean).unwrap();
+        let mut index = AnnIndex::new(3, Distance::Euclidean()).unwrap();
 
         let data = vec![
             vec![1.0, 2.0, 3.0],
