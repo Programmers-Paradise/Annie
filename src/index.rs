@@ -330,16 +330,6 @@ impl AnnIndex {
             dists_arr.into_pyarray(py).into(),
         ))
     }
-
-    fn validate_path(path: &str) -> PyResult<()> {
-        if path.contains("..") {
-            return Err(RustAnnError::py_err(
-                "InvalidPath",
-                "Path must not contain traversal sequences"
-            ));
-        }
-        Ok(())
-    }
     
     /// Save the index to a binary file.
     /// 
@@ -554,6 +544,16 @@ impl AnnIndex {
         );
 
     Ok((ids, dists))
+    }
+
+    fn validate_path(path: &str) -> PyResult<()> {
+        if path.contains("..") {
+            return Err(RustAnnError::py_err(
+                "InvalidPath",
+                "Path must not contain traversal sequences"
+            ));
+        }
+        Ok(())
     }
 }
 
