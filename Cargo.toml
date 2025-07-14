@@ -29,5 +29,5 @@ rocm = ["hip-rs"]
 members = [".", "fuzz", "rust_annie_macros/foo"]
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.6"
 rand = "0.8"
