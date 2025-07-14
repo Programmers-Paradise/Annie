@@ -146,26 +146,26 @@ index.dim()
 ### `save(path: str)`
 Save the index to a binary file.
 
-- `path` (str): Base path for the saved file. The '.bin' extension will be automatically appended.
-- Raises: `RustAnnError`: If the file cannot be written or serialization fails.
+- `path` (str): Base path for the saved file. The '.bin' extension will be automatically appended. The path must be relative and must not contain traversal sequences (e.g., "..").
+- Raises: `RustAnnError`: If the file cannot be written, serialization fails, or the path is invalid.
 
 Example:
 ```python
 index.save("my_index")  # Saves to "my_index.bin"
-index.save("/path/to/index")  # Saves to "/path/to/index.bin"
+index.save("relative/path/to/index")  # Saves to "relative/path/to/index.bin"
 ```
 
 ### `static load(path: str) -> AnnIndex`
 Load an index from a binary file.
 
-- `path` (str): Base path of the saved file. The '.bin' extension will be automatically appended.
+- `path` (str): Base path of the saved file. The '.bin' extension will be automatically appended. The path must be relative and must not contain traversal sequences (e.g., "..").
 - Returns: `AnnIndex`: The loaded index instance with all vectors and configuration.
-- Raises: `RustAnnError`: If the file cannot be read or deserialization fails.
+- Raises: `RustAnnError`: If the file cannot be read, deserialization fails, or the path is invalid.
 
 Example:
 ```python
 index = AnnIndex.load("my_index")  # Loads from "my_index.bin"
-index = AnnIndex.load("/path/to/index")  # Loads from "/path/to/index.bin"
+index = AnnIndex.load("relative/path/to/index")  # Loads from "relative/path/to/index.bin"
 ```
 
 ### `__len__() -> int`
