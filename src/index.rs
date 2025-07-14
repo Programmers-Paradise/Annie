@@ -330,6 +330,16 @@ impl AnnIndex {
             dists_arr.into_pyarray(py).into(),
         ))
     }
+
+    fn validate_path(path: &str) -> PyResult<()> {
+        if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
+            return Err(RustAnnError::py_err(
+                "InvalidPath",
+                "Path must be relative and not contain traversal sequences"
+            ));
+        }
+        Ok(())
+    }
     
     /// Save the index to a binary file.
     /// 
@@ -347,6 +357,7 @@ impl AnnIndex {
     ///     >>> index.save("my_index")  # Saves to "my_index.bin"
     ///     >>> index.save("/path/to/index")  # Saves to "/path/to/index.bin"
     pub fn save(&self, path: &str) -> PyResult<()> {
+        Self::validate_path(path)?;
         let full = format!("{}.bin", path);
         save_index(self, &full).map_err(|e| e.into_pyerr())
     }
@@ -371,6 +382,7 @@ impl AnnIndex {
     ///     >>> index = AnnIndex.load("my_index")  # Loads from "my_index.bin"
     ///     >>> index = AnnIndex.load("/path/to/index")  # Loads from "/path/to/index.bin"
     pub fn load(path: &str) -> PyResult<Self> {
+        Self::validate_path(path)?;
         let full = format!("{}.bin", path);
         load_index(&full).map_err(|e| e.into_pyerr())
     }
