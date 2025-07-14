@@ -332,10 +332,10 @@ impl AnnIndex {
     }
 
     fn validate_path(path: &str) -> PyResult<()> {
-        if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
+        if path.contains("..") {
             return Err(RustAnnError::py_err(
                 "InvalidPath",
-                "Path must be relative and not contain traversal sequences"
+                "Path must not contain traversal sequences"
             ));
         }
         Ok(())
