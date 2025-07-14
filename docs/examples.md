@@ -68,10 +68,12 @@ index = AnnIndex(64, Distance.COSINE)
 data = np.random.rand(500, 64).astype(np.float32)
 ids = np.arange(500, dtype=np.int64)
 index.add(data, ids)
-index.save("my_index")
 
-# Load index
-loaded_index = AnnIndex.load("my_index")
+# Save index with path validation
+index.save("my_index")  # Ensure path is relative and does not contain traversal sequences
+
+# Load index with path validation
+loaded_index = AnnIndex.load("my_index")  # Ensure path is relative and does not contain traversal sequences
 ```
 
 ## Thread-safe Operations
@@ -500,8 +502,8 @@ Same API as `AnnIndex`, safe for concurrent use.
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
-| save(path)                            | Save index to disk                         | 
-| load(path)                            | Load index from disk                       | 
+| save(path)                            | Save index to disk (path must be relative and not contain traversal sequences) | 
+| load(path)                            | Load index from disk (path must be relative and not contain traversal sequences) | 
 | new_with_metric(dim, metric_name)     | Create index with custom metric            |
 | enable_metrics(port)                  | Enable metrics collection and HTTP server  |
 | get_metrics()                         | Retrieve current metrics as a dictionary   |
