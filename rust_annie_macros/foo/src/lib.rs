@@ -1,31 +1,45 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, AttributeArgs, NestedMeta, Lit, Meta};
+use syn::{parse_macro_input, DeriveInput, Lit, Meta, Expr};
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
 use proc_macro2::Span;
-use syn::Ident;
+use syn::{Ident, parse::{Parse, ParseStream}};
+
+// Helper wrapper so Punctuated<Meta, Comma> can be parsed from TokenStream
+struct MetaArgs(Punctuated<Meta, Comma>);
+
+impl Parse for MetaArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(MetaArgs(Punctuated::parse_terminated(input)?))
+    }
+}
 
 #[proc_macro_attribute]
 pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(attr as AttributeArgs);
+    let args = parse_macro_input!(attr as MetaArgs).0;
     let mut _backend_name = None;
     let mut distance_metric = quote! { crate::metrics::Distance::Euclidean };
 
-    // Parse attributes
-    for arg in args {
-        if let NestedMeta::Meta(Meta::NameValue(nv)) = arg {
+    for meta in args {
+        if let Meta::NameValue(nv) = meta {
             if nv.path.is_ident("backend") {
-                if let Lit::Str(s) = &nv.lit {
-                    _backend_name = Some(s.value());
+                if let Expr::Lit(expr_lit) = &nv.value {
+                    if let Lit::Str(s) = &expr_lit.lit {
+                        _backend_name = Some(s.value());
+                    }
                 }
             } else if nv.path.is_ident("distance") {
-                if let Lit::Str(s) = &nv.lit {
-                    distance_metric = match s.value().as_str() {
-                        "Euclidean" => quote! { crate::metrics::Distance::Euclidean },
-                        "Cosine" => quote! { crate::metrics::Distance::Cosine },
-                        "Manhattan" => quote! { crate::metrics::Distance::Manhattan },
-                        "Chebyshev" => quote! { crate::metrics::Distance::Chebyshev },
-                        _ => distance_metric,
-                    };
+                if let Expr::Lit(expr_lit) = &nv.value {
+                    if let Lit::Str(s) = &expr_lit.lit {
+                        distance_metric = match s.value().as_str() {
+                            "Euclidean" => quote! { crate::metrics::Distance::Euclidean },
+                            "Cosine" => quote! { crate::metrics::Distance::Cosine },
+                            "Manhattan" => quote! { crate::metrics::Distance::Manhattan },
+                            "Chebyshev" => quote! { crate::metrics::Distance::Chebyshev },
+                            _ => distance_metric,
+                        };
+                    }
                 }
             }
         }
@@ -33,13 +47,11 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
-    
-    // Create new identifier for Python struct
     let py_name = Ident::new(&format!("Py{}", name), Span::call_site());
-    
+
     let expanded = quote! {
         #input
-        
+
         #[pyo3::pyclass]
         pub struct #py_name {
             inner: #name,
@@ -101,7 +113,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 self.inner.save(&path);
                 Ok(())
             }
-            
+
             #[staticmethod]
             fn load(path: String) -> pyo3::PyResult<Self> {
                 if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
