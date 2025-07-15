@@ -28,8 +28,13 @@ Search for k approximate nearest neighbors.
 ### `save(path: str)`
 Save index to disk.
 
+- `path`: File path where the index will be saved.
+
 ### `static load(path: str) -> PyHnswIndex`
-Load index from disk (currently not implemented)
+Load index from disk.
+
+- `path`: File path from which the index will be loaded.
+- Returns: A `PyHnswIndex` instance with the loaded data.
 
 ## New Features
 
@@ -58,6 +63,16 @@ index.add(data, ids)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids = index.search(query, k=10)
+
+# Save index
+index.save("index.bin")
+
+# Load index
+loaded_index = PyHnswIndex.load("index.bin")
+
+# Verify loaded index
+loaded_neighbor_ids = loaded_index.search(query, k=10)
+np.testing.assert_array_equal(neighbor_ids, loaded_neighbor_ids)
 
 # Register a custom distance metric
 def custom_metric(a, b):
@@ -160,6 +175,16 @@ index.add(data, ids)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids = index.search(query, k=10)
+
+# Save index
+index.save("index.bin")
+
+# Load index
+loaded_index = PyHnswIndex.load("index.bin")
+
+# Verify loaded index
+loaded_neighbor_ids = loaded_index.search(query, k=10)
+np.testing.assert_array_equal(neighbor_ids, loaded_neighbor_ids)
 ```
 
 ## Examples
