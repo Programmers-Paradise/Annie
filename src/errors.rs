@@ -1,6 +1,7 @@
 // src/errors.rs
-
-use pyo3::exceptions::{PyException, PyIOError};
+use std::fmt;
+use std::sync::PoisonError;
+use pyo3::exceptions::{PyException, PyIOError,PyRuntimeError};
 use pyo3::PyErr;
 
 /// A simple error type for the ANN library, used to convert Rust errors into Python exceptions.
@@ -25,5 +26,37 @@ impl RustAnnError {
     /// Convert this RustAnnError into a Python `IOError` (`OSError`) exception.
     pub fn into_pyerr(self) -> PyErr {
         PyIOError::new_err(self.0)
+    }
+}
+
+pub enum DistanceRegistryError {
+    LockPoisoned,
+    RegistryNotInitialized,
+    PythonCallFailed(String),
+    PythonConversionFailed(String),
+    MetricNotFound(String),
+}
+
+impl fmt::Display for DistanceRegistryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LockPoisoned => write!(f, "Global lock poisoned"),
+            Self::RegistryNotInitialized => write!(f, "Distance registry not initialized"),
+            Self::PythonCallFailed(e) => write!(f, "Python call failed: {}", e),
+            Self::PythonConversionFailed(e) => write!(f, "Python value conversion failed: {}", e),
+            Self::MetricNotFound(name) => write!(f, "Metric '{}' not found", name),
+        }
+    }
+}
+
+impl From<DistanceRegistryError> for PyErr {
+    fn from(e: DistanceRegistryError) -> PyErr {
+        PyRuntimeError::new_err(e.to_string())
+    }
+}
+
+impl<T> From<PoisonError<T>> for DistanceRegistryError {
+    fn from(_: PoisonError<T>) -> Self {
+        Self::LockPoisoned
     }
 }
