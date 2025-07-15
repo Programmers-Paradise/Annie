@@ -44,7 +44,7 @@ impl AnnBackend for HnswIndex {
     fn add_item(&mut self, item: Vec<f32>) {
         let internal_id = self.user_ids.len();
         self.index.insert((&item, internal_id));
-        self.user_ids.push(internal_id as i64); // default internal ID as user ID
+        self.user_ids.push(user_id);
         self.vectors.push(item);
     }
 
@@ -68,13 +68,14 @@ impl AnnBackend for HnswIndex {
             vectors: self.vectors.clone(),
         };
 
-        let file = File::create(path).expect("Failed to create file");
+        let safe_path = sanitize_path(path).expect("Invalid or unsafe file path");
+        let file = File::create(&safe_path).expect("Failed to create file");
         let writer = BufWriter::new(file);
         bincode::serialize_into(writer, &data).expect("Serialization failed");
     }
 
     fn load(_path: &str) -> Self {
-        let file = File::open(path).expect("Failed to open file");
+        let file = File::open(&safe_path).expect("Failed to open file");
         let reader = BufReader::new(file);
         let data: HnswIndexData = bincode::deserialize_from(reader).expect("Deserialization failed");
 
