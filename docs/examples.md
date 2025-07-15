@@ -59,6 +59,16 @@ index.add(data, ids)
 # Fast approximate search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids, _ = index.search(query, k=10)
+
+# Save the index
+index.save("hnsw_index.bin")
+
+# Load the index
+loaded_index = PyHnswIndex.load("hnsw_index.bin")
+
+# Verify search results are consistent
+loaded_neighbor_ids, _ = loaded_index.search(query, k=10)
+assert np.array_equal(neighbor_ids, loaded_neighbor_ids)
 ```
 
 ## Saving and Loading
@@ -301,6 +311,16 @@ index.add(data, ids)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids, _ = index.search(query, k=10)
+
+# Save the index
+index.save("hnsw_index.bin")
+
+# Load the index
+loaded_index = PyHnswIndex.load("hnsw_index.bin")
+
+# Verify search results are consistent
+loaded_neighbor_ids, _ = loaded_index.search(query, k=10)
+assert np.array_equal(neighbor_ids, loaded_neighbor_ids)
 ```
 
 ## Examples
