@@ -62,17 +62,13 @@ pub fn compute_distances_with_ids(
 }
 
 pub fn validate_path(path: &str) -> Result<String, &'static str> {
-    let path = Path::new(path);
-    
-    if path.components().count() != 1 {
-        return Err("Path must not contain directory components");
-    }
-    
-    if path.to_string_lossy().contains("..") {
+    if path.contains("..") {
         return Err("Path must not contain traversal sequences");
     }
-    
-    Ok(path.to_string_lossy().into_owned())
+    if path.contains('/') || path.contains('\\') {
+        return Err("Path must not contain directory separators");
+    }
+    Ok(path.to_string())
 }
 
 fn dot(a: &[f32], b: &[f32]) -> f32 {

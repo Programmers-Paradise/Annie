@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
-use std::path::Path;
 use bincode;
+use serde::{Serialize, Deserialize};
 use hnsw_rs::prelude::*;
 use crate::backend::AnnBackend;
 use crate::metrics::Distance;
@@ -55,8 +55,8 @@ impl AnnBackend for HnswIndex {
     fn save(&self, path: &str) {
         let safe_path = validate_path(path).expect("Invalid or unsafe file path");
         
-        // Serialize HNSW index to byte vector
-        let hnsw_data = self.index.encode().expect("HNSW encoding failed");
+        // Serialize HNSW index using its built-in method
+        let hnsw_data = self.index.dump().expect("HNSW serialization failed");
         
         let data = HnswIndexData {
             dims: self.dims,
@@ -77,7 +77,7 @@ impl AnnBackend for HnswIndex {
         let data: HnswIndexData = bincode::deserialize_from(reader).expect("Deserialization failed");
 
         // Deserialize HNSW index directly from bytes
-        let index = Hnsw::decode(&data.hnsw_data).expect("HNSW decoding failed");
+        let index = Hnsw::load(&data.hnsw_data).expect("HNSW deserialization failed");
 
         HnswIndex {
             index,

@@ -1,5 +1,5 @@
 pub mod py_index;
-mod utils;
+pub mod utils;
 pub mod index;
 mod storage;
 pub mod metrics;
