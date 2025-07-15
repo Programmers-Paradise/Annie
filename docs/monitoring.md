@@ -283,3 +283,7 @@ print("Uptime:", metrics.get('uptime_seconds', 0))
 ## Conclusion
 
 The Annie monitoring system provides production-ready metrics for K-NN workloads with minimal overhead. It integrates seamlessly with existing monitoring infrastructure through Prometheus-compatible endpoints and provides detailed insights into query performance and index characteristics.
+
+## CI/CD Logging Updates
+
+Recent updates to the CI workflow have introduced additional logging steps to enhance the release process. These steps include logging the start of the release process, the GitHub reference, and the event name. When a new tag is detected, the version being released is logged. Upon successful publication to PyPI, a confirmation message is logged, along with a link to the package on PyPI. These logs can be useful for monitoring the release process and ensuring that each step is executed correctly.
