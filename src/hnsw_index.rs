@@ -11,7 +11,6 @@ use crate::utils::validate_path; // Import path validation utility
 struct HnswIndexData {
     dims: usize,
     user_ids: Vec<i64>,
-    hnsw_data: Vec<u8>, // Serialized HNSW index
 }
 
 pub struct HnswIndex {
@@ -36,7 +35,7 @@ impl AnnBackend for HnswIndex {
         }
     }
 
-    fn add_item(&mut self, item: Vec<f32>) {
+    fn add(&mut self, item: Vec<f32>, user_id: i64) {
         let internal_id = self.user_ids.len();
         self.index.insert((&item, internal_id));
         self.user_ids.push(user_id);
@@ -54,17 +53,12 @@ impl AnnBackend for HnswIndex {
 
     fn save(&self, path: &str) {
         let safe_path = validate_path(path).expect("Invalid or unsafe file path");
-        
-        // Serialize HNSW index using its built-in method
-        let hnsw_data = self.index.dump().expect("HNSW serialization failed");
-        
+
         let data = HnswIndexData {
             dims: self.dims,
             user_ids: self.user_ids.clone(),
-            hnsw_data,
         };
 
-        let safe_path = sanitize_path(path).expect("Invalid or unsafe file path");
         let file = File::create(&safe_path).expect("Failed to create file");
         let writer = BufWriter::new(file);
         bincode::serialize_into(writer, &data).expect("Serialization failed");
@@ -76,8 +70,13 @@ impl AnnBackend for HnswIndex {
         let reader = BufReader::new(file);
         let data: HnswIndexData = bincode::deserialize_from(reader).expect("Deserialization failed");
 
-        // Deserialize HNSW index directly from bytes
-        let index = Hnsw::load(&data.hnsw_data).expect("HNSW deserialization failed");
+        let mut index = Hnsw::new(
+            16,
+            10_000,
+            16,
+            200,
+            DistL2 {},
+        );
 
         HnswIndex {
             index,
