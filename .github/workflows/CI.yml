@@ -10,7 +10,7 @@ on:
       - main
       - master
     tags:
-      - '*'
+      - "*"
   pull_request:
   workflow_dispatch:
 
@@ -159,10 +159,22 @@ jobs:
       attestations: write
     steps:
       - uses: actions/download-artifact@v4
+
+      - name: Log release info
+        run: |
+          echo "Starting release process"
+          echo "GitHub ref: ${{ github.ref }}"
+          echo "Event name: ${{ github.event_name }}"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            echo "Releasing version: $TAG_NAME"
+          fi
+
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: 'wheels-*/*'
+          subject-path: "wheels-*/*"
+
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: PyO3/maturin-action@v1
@@ -171,6 +183,13 @@ jobs:
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*
+
+      - name: Release complete
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "Successfully published $TAG_NAME to PyPI"
+          echo "Check your package at: https://pypi.org/project/rust-annie/"
 
   benchmark:
     name: Benchmark Comparison
@@ -183,7 +202,7 @@ jobs:
       - name: Setup Python and Rust
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable

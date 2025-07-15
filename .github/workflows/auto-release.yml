@@ -1,0 +1,73 @@
+name: Auto Release on Version Change
+
+on:
+  push:
+    branches: [main]
+    paths: ["Cargo.toml"]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version-changed: ${{ steps.version.outputs.changed }}
+      new-version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check version change
+        id: version
+        run: |
+          # Get the version from the previous commit
+          OLD_VERSION=$(git show HEAD~1:Cargo.toml | grep '^version = ' | head -1 | cut -d'"' -f2)
+          # Get the current version
+          NEW_VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
+
+          echo "Previous version: $OLD_VERSION"
+          echo "Current version: $NEW_VERSION"
+
+          if [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "Version changed: $OLD_VERSION → $NEW_VERSION"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No version change detected"
+          fi
+
+  auto-release:
+    needs: check-version
+    if: needs.check-version.outputs.version-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create tag and trigger release
+        run: |
+          VERSION=${{ needs.check-version.outputs.new-version }}
+          TAG_NAME="v$VERSION"
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check if tag already exists
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists, skipping release"
+            exit 0
+          fi
+
+          # Create and push tag
+          echo "Creating tag $TAG_NAME for version $VERSION"
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+
+          echo "Tag $TAG_NAME created successfully"
+          echo "This will trigger the CI workflow to publish to PyPI"
