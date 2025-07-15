@@ -1,27 +1,23 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
+use std::path::Path;
 use bincode;
-use serde::{Serialize, Deserialize};
 use hnsw_rs::prelude::*;
 use crate::backend::AnnBackend;
 use crate::metrics::Distance;
+use crate::utils::validate_path; // Import path validation utility
 
 #[derive(Serialize, Deserialize)]
 struct HnswIndexData {
     dims: usize,
-    m: u16,
-    max_elements: usize,
-    ef_construction: usize,
-    ef_search: usize,
     user_ids: Vec<i64>,
-    vectors: Vec<Vec<f32>>,
+    hnsw_data: Vec<u8>, // Serialized HNSW index
 }
 
 pub struct HnswIndex {
     index: Hnsw<'static, f32, DistL2>,
     dims: usize,
     user_ids: Vec<i64>, // Maps internal ID → user ID
-    vectors: Vec<Vec<f32>>,
 }
 
 impl AnnBackend for HnswIndex {
@@ -37,7 +33,6 @@ impl AnnBackend for HnswIndex {
             index,
             dims,
             user_ids: Vec::new(),
-            vectors: Vec::new(),
         }
     }
 
@@ -57,15 +52,16 @@ impl AnnBackend for HnswIndex {
         results.into_iter().map(|n| n.d_id).collect()
     }
 
-    fn save(&self, _path: &str) {
+    fn save(&self, path: &str) {
+        let safe_path = validate_path(path).expect("Invalid or unsafe file path");
+        
+        // Serialize HNSW index to byte vector
+        let hnsw_data = self.index.encode().expect("HNSW encoding failed");
+        
         let data = HnswIndexData {
             dims: self.dims,
-            m: self.index.get_m(),
-            max_elements: self.index.get_max_elements(),
-            ef_construction: self.index.get_ef_construction(),
-            ef_search: self.index.get_ef(),
             user_ids: self.user_ids.clone(),
-            vectors: self.vectors.clone(),
+            hnsw_data,
         };
 
         let safe_path = sanitize_path(path).expect("Invalid or unsafe file path");
@@ -74,28 +70,19 @@ impl AnnBackend for HnswIndex {
         bincode::serialize_into(writer, &data).expect("Serialization failed");
     }
 
-    fn load(_path: &str) -> Self {
+    fn load(path: &str) -> Self {
+        let safe_path = validate_path(path).expect("Invalid or unsafe file path");
         let file = File::open(&safe_path).expect("Failed to open file");
         let reader = BufReader::new(file);
         let data: HnswIndexData = bincode::deserialize_from(reader).expect("Deserialization failed");
 
-        let mut index = Hnsw::new(
-            data.m,
-            data.max_elements,
-            data.ef_construction,
-            data.ef_search,
-            DistL2 {},
-        );
-
-        for (internal_id, vec) in data.vectors.iter().enumerate() {
-            index.insert((vec, internal_id));
-        }
+        // Deserialize HNSW index directly from bytes
+        let index = Hnsw::decode(&data.hnsw_data).expect("HNSW decoding failed");
 
         HnswIndex {
             index,
             dims: data.dims,
             user_ids: data.user_ids,
-            vectors: data.vectors,
         }
     }
 }

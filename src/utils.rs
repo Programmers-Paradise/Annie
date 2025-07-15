@@ -1,5 +1,6 @@
 use crate::metrics::Distance;
 use crate::distance_registry::get_distance_function;
+use std::path::Path;
 
 pub fn compute_distances_with_ids(
     entries: &[(i64, Vec<f32>, f32)],
@@ -60,8 +61,21 @@ pub fn compute_distances_with_ids(
     (ids, dists)
 }
 
+pub fn validate_path(path: &str) -> Result<String, &'static str> {
+    let path = Path::new(path);
+    
+    if path.components().count() != 1 {
+        return Err("Path must not contain directory components");
+    }
+    
+    if path.to_string_lossy().contains("..") {
+        return Err("Path must not contain traversal sequences");
+    }
+    
+    Ok(path.to_string_lossy().into_owned())
+}
+
 fn dot(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "dot: input slices must have the same length");
     a.iter().zip(b).map(|(x, y)| x * y).sum()
 }
-

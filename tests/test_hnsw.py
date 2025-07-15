@@ -57,3 +57,11 @@ def test_hnsw_save_load(tmp_path):
     
     # Verify same results
     np.testing.assert_array_equal(original_ids, loaded_ids)
+
+def test_path_sanitization():
+    with pytest.raises(Exception):
+        index = PyHnswIndex(dims=64)
+        index.save("../invalid_path")
+        
+    with pytest.raises(Exception):
+        index = PyHnswIndex.load("/etc/passwd")
