@@ -4,7 +4,7 @@ mod gpu {
 
     pub fn l2_distance_gpu(queries: &[f32], corpus: &[f32], dim: usize, n_queries: usize, n_vectors: usize) -> Result<Vec<f32>, cust::error::CudaError> {
         // Load PTX and create context
-        let ptx = include_str!("kernels/l2_kernel.ptx");
+        let ptx = include_str!("kernels/l2_kernel_fp32.ptx");
         let _ctx = cust::quick_init()?;
         let module = Module::from_ptx(ptx, &[])?;
         let stream = Stream::new(StreamFlags::NON_BLOCKING, None)?;

@@ -2,6 +2,9 @@
 mod cuda;
 #[cfg(feature = "rocm")]
 mod rocm;
+mod memory;
+mod device;
+mod precision;
 
 use thiserror::Error;
 
@@ -13,6 +16,14 @@ pub enum GpuError {
     Cuda(#[from] cust::error::CudaError),
     #[error("ROCm error: {0}")]
     Rocm(#[from] hip_runtime::Status),
+    #[error("Memory allocation failed: {0}")]
+    Allocation(String),
+    #[error("Unsupported precision type")]
+    UnsupportedPrecision,
+    #[error("Device index out of range: {0}")]
+    DeviceIndex(usize),
+    #[error("Multi-GPU synchronization error")]
+    MultiGpuSync,
 }
 
 pub trait GpuBackend {
@@ -22,7 +33,12 @@ pub trait GpuBackend {
         dim: usize,
         n_queries: usize,
         n_vectors: usize,
+        device_id: usize,
+        precision: Precision,
     ) -> Result<Vec<f32>, GpuError>;
+
+    fn memory_usage(device_id: usize) -> Result<(usize, usize), GpuError>;
+    fn device_count() -> usize;
 }
 
 pub fn l2_distance_gpu(
@@ -31,16 +47,32 @@ pub fn l2_distance_gpu(
     dim: usize,
     n_queries: usize,
     n_vectors: usize,
+    device_id: usize,
+    precision: Precision,
 ) -> Result<Vec<f32>, GpuError> {
     #[cfg(feature = "cuda")]
     {
-        return cuda::CudaBackend::l2_distance(queries, corpus, dim, n_queries, n_vectors);
+        if device_id >= cuda::device_count() {
+            return Err(GpuError::DeviceIndex(device_id));
+        }
+        return cuda::CudaBackend::l2_distance(
+            queries, corpus, dim, n_queries, n_vectors, device_id, precision
+        );
     }
     
     #[cfg(feature = "rocm")]
     {
-        return rocm::RocmBackend::l2_distance(queries, corpus, dim, n_queries, n_vectors);
+        if device_id >= rocm::device_count() {
+            return Err(GpuError::DeviceIndex(device_id));
+        }
+        return rocm::RocmBackend::l2_distance(
+            queries, corpus, dim, n_queries, n_vectors, device_id, precision
+        );
     }
     
     Err(GpuError::NoBackend)
 }
+
+pub use device::set_active_device;
+pub use precision::Precision;
+pub use memory::GpuMemoryPool;
