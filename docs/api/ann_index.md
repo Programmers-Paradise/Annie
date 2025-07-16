@@ -259,6 +259,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
+  - **GPU** (exact) for high-performance brute-force calculations
 - **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and custom metrics
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
@@ -322,6 +323,23 @@ index.add(data, ids)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids, _ = index.search(query, k=10)
+```
+
+### GPU Index
+```python
+from rust_annie import BackendEnum, Distance
+
+# Create GPU index
+index = BackendEnum.new("gpu", 128, Distance.Euclidean())
+
+# Add data
+data = np.random.rand(1000000, 128).astype(np.float32)
+for vector in data:
+    index.add(vector)
+
+# Search
+query = np.random.rand(128).astype(np.float32)
+neighbor_ids = index.search(query, k=10)
 ```
 
 ## Examples
@@ -521,6 +539,7 @@ You’ll find:
 | PyHnswIndex	       | Approximate HNSW index                     |
 | ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex          |
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc) |
+| BackendEnum        | 	Unified interface for different backends  |
 
 ## Key Methods
 
@@ -588,6 +607,42 @@ Supported operations:
 Requirements:
   - NVIDIA GPU with CUDA support
   - CUDA Toolkit installed
+
+### GPU Performance Optimization Guide
+
+#### Memory Management
+- Use `GpuMemoryPool` for buffer reuse
+- Monitor usage with `memory_usage()`
+- Pre-allocate buffers during initialization
+
+#### Multi-GPU Setup
+```rust
+// Distribute across 4 GPUs
+for device_id in 0..4 {
+    set_active_device(device_id)?;
+    // Add portion of dataset
+}
+```
+
+#### Precision Selection
+```rust
+gpu_backend.set_precision(Precision::Fp16);  // 2x memory savings
+```
+
+#### Kernel Selection
+We provide optimized kernels for:
+- `l2_distance_fp32.ptx`
+- `l2_distance_fp16.ptx`
+- `l2_distance_int8.ptx`
+
+#### Benchmark Results
+
+Command: `cargo bench --features cuda`
+
+Typical results on V100:
+- FP32: 15ms @ 1M vectors
+- FP16: 9ms @ 1M vectors
+- INT8: 6ms @ 1M vectors (with quantization)
 
 ## Contributing
 
