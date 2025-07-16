@@ -73,10 +73,17 @@ neighbor_ids, distances = index.search(query, k=5)
 
 ### HNSW Index
 ```python 
-from rust_annie import PyHnswIndex
+from rust_annie import PyHnswIndex, PyHnswConfig
 import numpy as np
 
-index = PyHnswIndex(dims=128)
+# Create a configuration
+config = PyHnswConfig(m=24, ef_construction=100, ef_search=128, max_elements=10000)
+config.validate()
+
+# Create the index using config
+index = PyHnswIndex(dims=128, config=config)
+
+# Add data
 data = np.random.rand(10000, 128).astype(np.float32)
 ids = np.arange(10000, dtype=np.int64)
 index.add(data, ids)
@@ -226,6 +233,7 @@ You’ll find:
 | ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex           |
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc)  |
 | Index              |Unified wrapper over AnnIndex and PyHnswIndex|
+| PyHnswConfig       |Configurable struct for HNSW                 |
 
 ### Utility Module
 
