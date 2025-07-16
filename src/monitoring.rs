@@ -173,12 +173,14 @@ impl MetricsServer {
                     Ok(stream) => {
                         let metrics_clone = Arc::clone(&metrics);
                         thread::spawn(move || {
-                            if let Err(e) = handle_request(stream, metrics_clone) {
+                            if let Err(e) = Self::handle_request(stream, metrics_clone) {
+                                #[cfg(debug_assertions)]
                                 eprintln!("Error handling metrics request: {}", e);
                             }
                         });
                     }
                     Err(e) => {
+                        #[cfg(debug_assertions)]
                         eprintln!("Error accepting connection: {}", e);
                     }
                 }
@@ -187,32 +189,29 @@ impl MetricsServer {
 
         Ok(())
     }
-}
 
-fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
-    let mut buffer = [0; 1024];
-    stream.read(&mut buffer)?;
+    fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
+        let mut buffer = [0; 1024];
+        let _ = stream.read(&mut buffer)?; // Request read
 
-    let request = String::from_utf8_lossy(&buffer[..]);
-    
-    // Simple HTTP request parsing
-    if request.starts_with("GET /metrics") {
-        let metrics_output = metrics.to_prometheus_format();
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
-            metrics_output.len(),
-            metrics_output
-        );
+        let request = String::from_utf8_lossy(&buffer[..]);
+
+        let response = if request.starts_with("GET /metrics") {
+            let metrics_output = metrics.to_prometheus_format();
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+                metrics_output.len(),
+                metrics_output
+            )
+        } else if request.starts_with("GET /health") {
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK".to_string()
+        } else {
+            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\n\r\nNot Found".to_string()
+        };
+
         stream.write_all(response.as_bytes())?;
-    } else if request.starts_with("GET /health") {
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK";
-        stream.write_all(response.as_bytes())?;
-    } else {
-        let response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\n\r\nNot Found";
-        stream.write_all(response.as_bytes())?;
+        Ok(())
     }
-
-    Ok(())
 }
 
 /// Python-facing metrics interface
