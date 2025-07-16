@@ -42,12 +42,10 @@ impl AnnBackend for GpuIndex {
 
     fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)> {
         if query.len() != self.dims {
-            panic!("Query vector length {} does not match index dimensions {}", query.len(), self.dims);
-        }       
+            return Vec::new();
+        }         
         // Convert vectors to flat array
-        let corpus: &[f32] = unsafe {
-            std::slice::from_raw_parts(self.vectors.as_ptr() as *const f32, self.vectors.len() * self.dims)
-        };
+        let corpus: Vec<f32> = self.vectors.iter().flatten().copied().collect();
         
         // Execute GPU search
         let distances = match l2_distance_gpu(
