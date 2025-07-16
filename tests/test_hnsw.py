@@ -1,11 +1,14 @@
 import numpy as np
-from rust_annie import PyHnswIndex
+from rust_annie import PyHnswIndex, HnswConfig
 import pytest
 import os
 
 def test_hnsw_basic():
     dim = 64
-    index = PyHnswIndex(dims=dim)
+    config = HnswConfig(m=24, ef_construction=100, ef_search=128, max_elements=2000)
+    config.validate()
+
+    index = PyHnswIndex(dims=dim, config=config)
     
     # Generate sample data
     data = np.random.rand(1000, dim).astype(np.float32)
@@ -20,12 +23,16 @@ def test_hnsw_basic():
     # Search
     retrieved_ids = index.search(query, k=10)
 
-    # Convert to numpy arrays if not already
-    retrieved_ids = np.array(retrieved_ids)
-    
     # Assertions
+    retrieved_ids = np.array(retrieved_ids)
     assert retrieved_ids.shape == (10,)
     assert issubclass(retrieved_ids.dtype.type, np.integer)
+
+def test_invalid_config():
+    config = HnswConfig(m=0, ef_construction=10, ef_search=0, max_elements=0)
+    with pytest.raises(ValueError):
+        config.validate()
+
 # Not implemented yet
 # def test_hnsw_save_load(tmp_path):
 #     dim = 64
