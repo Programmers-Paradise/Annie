@@ -33,13 +33,18 @@ impl GpuBackend for CudaBackend {
         let func = get_kernel_function(&module, &kernel_name)?;
         let (queries_conv, corpus_conv) = convert_data(queries, corpus, precision)?;
         let mut pool = MEMORY_POOL.lock().unwrap();
+        if queries_conv.len() != n_queries * dim * precision.element_size() || corpus_conv.len() != n_vectors * dim * precision.element_size() {
+            return Err(GpuError::InvalidInput("Input buffer size does not match expected dimensions".to_string()));
+        }
         let (query_buf, corpus_buf, mut out_buf) = allocate_buffers(&mut pool, device_id, &queries_conv, &corpus_conv, n_queries, n_vectors, precision);
         let (d_query, d_corpus, mut d_out) = copy_data_to_device(&queries_conv, &corpus_conv, &mut out_buf)?;
         launch_l2_kernel(&func, &stream, &d_query, &d_corpus, &mut d_out, n_queries, n_vectors, dim)?;
         let results = copy_results_from_device(&stream, &mut d_out, n_queries, n_vectors)?;
-        return_buffers(&mut pool, device_id, query_buf, corpus_buf, out_buf, &queries_conv, &corpus_conv, &results, precision);
         Ok(results)
+        // return_buffers must be called after results are no longer needed, or ensure device memory is not dropped before host copy completes
+        return_buffers(&mut pool, device_id, query_buf, corpus_buf, out_buf, &queries_conv, &corpus_conv, &results, precision);
     }
+// Refactor: Move device setup, kernel selection, memory management, and kernel launch into separate helper functions or modules to reduce complexity and improve maintainability.
 
     fn memory_usage(device_id: usize) -> Result<(usize, usize), GpuError> {
         MEMORY_POOL.lock().unwrap().memory_usage(device_id)

@@ -23,8 +23,7 @@
     .reg .b32 %r<30>;
     .reg .b64 %rd<30>;
     
-    .reg .f32 %scale;
-    mov.f32 %scale, 0f3B004089; // 1/127.0
+    .const .f32 scale = 0f3B004089; // 1/127.0
     
     ld.param.u64 %rd1, [l2_distance_int8_param_0];
     ld.param.u64 %rd2, [l2_distance_int8_param_1];

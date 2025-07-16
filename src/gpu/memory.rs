@@ -60,27 +60,28 @@ impl GpuMemoryPool {
         Self(Arc::new(Mutex::new(HashMap::new())))
     }
     pub fn get_buffer(&self, device_id: usize, size: usize, precision: Precision) -> Vec<u8> {
-        let pools = self.0.lock().unwrap();
-        let pool = pools.get(&device_id).cloned().unwrap_or_else(|| {
-            drop(pools);
+        let pool = {
             let mut pools = self.0.lock().unwrap();
             pools.entry(device_id).or_insert_with(|| Arc::new(Mutex::new(DeviceMemoryPool::new()))).clone()
-        });
+        };
         let mut pool = pool.lock().unwrap();
         pool.get_buffer(size, precision)
     }
     pub fn return_buffer(&self, device_id: usize, buffer: Vec<u8>, size: usize, precision: Precision) {
-        let pools = self.0.lock().unwrap();
-        if let Some(pool) = pools.get(&device_id) {
+        if let Some(pool) = {
+            let pools = self.0.lock().unwrap();
+            pools.get(&device_id).cloned()
+        } {
             let mut pool = pool.lock().unwrap();
             pool.return_buffer(buffer, size, precision);
         }
     }
     pub fn memory_usage(&self, device_id: usize) -> Option<(usize, usize)> {
-        let pools = self.0.lock().unwrap();
-        pools.get(&device_id).map(|pool| {
-            let pool = pool.lock().unwrap();
-            (pool.allocated, pool.peak_usage)
-        })
+        let pool = {
+            let pools = self.0.lock().unwrap();
+            pools.get(&device_id).cloned()
+        }?;
+        let pool = pool.lock().unwrap();
+        Some((pool.allocated, pool.peak_usage))
     }
 }
