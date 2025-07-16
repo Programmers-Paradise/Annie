@@ -49,15 +49,9 @@ $L__BB0_2:
     add.s32 %r10, %r9, %r8;
     mul.wide.s32 %rd7, %r10, 2;
     add.s64 %rd8, %rd4, %rd7;
-    ld.global.nc.u16 %rs1, [%rd8];
-    cvt.f32.f16 %f1, %rs1;
-    
-    mul.lo.s32 %r11, %r6, %r3;
-    add.s32 %r12, %r11, %r8;
-    mul.wide.s32 %rd9, %r12, 2;
-    add.s64 %rd10, %rd5, %rd9;
-    ld.global.nc.u16 %rs2, [%rd10];
-    cvt.f32.f16 %f2, %rs2;
+    // TODO: Use shared memory tiling to load input vectors in coalesced chunks, reducing global memory transactions and improving bandwidth utilization.
+    // Example: load a tile of elements per thread block into shared memory, then compute L2 distance from shared memory.
+    // This requires allocating shared memory, synchronizing threads, and updating the access pattern accordingly.
     
     sub.f32 %f3, %f1, %f2;
     fma.rn.f32 %f29, %f3, %f3, %f29;

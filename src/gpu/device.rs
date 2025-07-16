@@ -19,6 +19,11 @@ pub fn set_active_device(device_id: usize) -> Result<(), GpuError> {
         hip_runtime::device::set_device(device_id as u32).map_err(|e| GpuError::Rocm(e.into()))?;
     }
     
+    #[cfg(not(any(feature = "cuda", feature = "rocm")))]
+    {
+        return Err(GpuError::NoBackend);
+    }
+    
     ACTIVE_DEVICE.store(device_id, std::sync::atomic::Ordering::SeqCst);
     Ok(())
 }
