@@ -10,9 +10,16 @@ fn bench_gpu_search(c: &mut Criterion) {
     
     // Add 1M random vectors
     let mut rng = rand::thread_rng();
-    for _ in 0..1_000_000 {
-        let vec: Vec<f32> = (0..128).map(|_| rng.gen()).collect();
-        backend.add(vec);
+    if let Some(batch_add) = backend.batch_add_method() {
+        let vectors: Vec<Vec<f32>> = (0..1_000_000)
+            .map(|_| (0..128).map(|_| rng.gen()).collect())
+            .collect();
+        batch_add(vectors);
+    } else {
+        for _ in 0..1_000_000 {
+            let vec: Vec<f32> = (0..128).map(|_| rng.gen()).collect();
+            backend.add(vec);
+        }
     }
     
     let query = vec![0.5; 128];

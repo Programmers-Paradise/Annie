@@ -45,33 +45,42 @@ impl DeviceMemoryPool {
     }
 
     fn record_deallocation(&mut self, bytes: usize) {
-        self.allocated -= bytes;
+        if bytes > self.allocated {
+            self.allocated = 0;
+        } else {
+            self.allocated -= bytes;
+        }
     }
 }
 
 #[derive(Clone)]
-pub struct GpuMemoryPool(Arc<Mutex<HashMap<usize, DeviceMemoryPool>>>);
-
+pub struct GpuMemoryPool(Arc<Mutex<HashMap<usize, Arc<Mutex<DeviceMemoryPool>>>>>);
 impl GpuMemoryPool {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(HashMap::new())))
     }
-
     pub fn get_buffer(&self, device_id: usize, size: usize, precision: Precision) -> Vec<u8> {
-        let mut pools = self.0.lock().unwrap();
-        let pool = pools.entry(device_id).or_insert_with(DeviceMemoryPool::new);
+        let pools = self.0.lock().unwrap();
+        let pool = pools.get(&device_id).cloned().unwrap_or_else(|| {
+            drop(pools);
+            let mut pools = self.0.lock().unwrap();
+            pools.entry(device_id).or_insert_with(|| Arc::new(Mutex::new(DeviceMemoryPool::new()))).clone()
+        });
+        let mut pool = pool.lock().unwrap();
         pool.get_buffer(size, precision)
     }
-
     pub fn return_buffer(&self, device_id: usize, buffer: Vec<u8>, size: usize, precision: Precision) {
-        let mut pools = self.0.lock().unwrap();
-        if let Some(pool) = pools.get_mut(&device_id) {
+        let pools = self.0.lock().unwrap();
+        if let Some(pool) = pools.get(&device_id) {
+            let mut pool = pool.lock().unwrap();
             pool.return_buffer(buffer, size, precision);
         }
     }
-
     pub fn memory_usage(&self, device_id: usize) -> Option<(usize, usize)> {
         let pools = self.0.lock().unwrap();
-        pools.get(&device_id).map(|p| (p.allocated, p.peak_usage))
+        pools.get(&device_id).map(|pool| {
+            let pool = pool.lock().unwrap();
+            (pool.allocated, pool.peak_usage)
+        })
     }
 }

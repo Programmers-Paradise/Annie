@@ -52,8 +52,17 @@ pub fn l2_distance_gpu(
 ) -> Result<Vec<f32>, GpuError> {
     #[cfg(feature = "cuda")]
     {
-        if device_id >= cuda::device_count() {
+        let device_count = cuda::device_count();
+        if device_id >= device_count {
             return Err(GpuError::DeviceIndex(device_id));
+        }
+
+        let device_count = rocm::device_count();
+        if device_id >= device_count {
+            return Err(GpuError::DeviceIndex(device_id));
+        }
+        if !cuda::CudaBackend::supports_precision(precision) {
+            return Err(GpuError::UnsupportedPrecision);
         }
         return cuda::CudaBackend::l2_distance(
             queries, corpus, dim, n_queries, n_vectors, device_id, precision
@@ -64,6 +73,9 @@ pub fn l2_distance_gpu(
     {
         if device_id >= rocm::device_count() {
             return Err(GpuError::DeviceIndex(device_id));
+        }
+        if !rocm::RocmBackend::supports_precision(precision) {
+            return Err(GpuError::UnsupportedPrecision);
         }
         return rocm::RocmBackend::l2_distance(
             queries, corpus, dim, n_queries, n_vectors, device_id, precision
