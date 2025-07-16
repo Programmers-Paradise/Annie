@@ -1,0 +1,82 @@
+//
+// Optimized L2 Distance Kernel for INT8
+// Compiler: NVCC 11.8
+// Target: sm_70+
+//
+
+.version 7.8
+.target sm_70
+.address_size 64
+
+.visible .entry l2_distance_int8(
+    .param .u64 .ptr .global .align 1 l2_distance_int8_param_0,
+    .param .u64 .ptr .global .align 1 l2_distance_int8_param_1,
+    .param .u64 .ptr .global .align 4 l2_distance_int8_param_2,
+    .param .u32 l2_distance_int8_param_3,
+    .param .u32 l2_distance_int8_param_4,
+    .param .u32 l2_distance_int8_param_5
+) {
+    .reg .pred %p<10>;
+    .reg .b16 %rs<4>;
+    .reg .b8 %rs8<4>;
+    .reg .f32 %f<30>;
+    .reg .b32 %r<30>;
+    .reg .b64 %rd<30>;
+    
+    .const .f32 scale = 0f3B004089; // 1/127.0
+    
+    ld.param.u64 %rd1, [l2_distance_int8_param_0];
+    ld.param.u64 %rd2, [l2_distance_int8_param_1];
+    ld.param.u64 %rd3, [l2_distance_int8_param_2];
+    ld.param.u32 %r1, [l2_distance_int8_param_3];
+    ld.param.u32 %r2, [l2_distance_int8_param_4];
+    ld.param.u32 %r3, [l2_distance_int8_param_5];
+    
+    cvta.to.global.u64 %rd4, %rd1;
+    cvta.to.global.u64 %rd5, %rd2;
+    cvta.to.global.u64 %rd6, %rd3;
+    
+    mov.u32 %r4, %ctaid.x;
+    mov.u32 %r5, %ntid.x;
+    mov.u32 %r6, %tid.x;
+    mad.lo.s32 %r7, %r4, %r5, %r6;
+    
+    setp.ge.u32 %p1, %r7, %r1;
+    @%p1 bra $L__BB0_3;
+    
+    mov.f32 %f29, 0f00000000;
+    mov.u32 %r8, 0;
+    
+$L__BB0_2:
+    mul.lo.s32 %r9, %r7, %r3;
+    add.s32 %r10, %r9, %r8;
+    mul.wide.s32 %rd7, %r10, 1;
+    add.s64 %rd8, %rd4, %rd7;
+    ld.global.nc.u8 %rs8, [%rd8];
+    cvt.rn.f32.s8 %f1, %rs8;
+    mul.f32 %f2, %f1, %scale;
+    
+    mul.lo.s32 %r11, %r6, %r3;
+    add.s32 %r12, %r11, %r8;
+    mul.wide.s32 %rd9, %r12, 1;
+    add.s64 %rd10, %rd5, %rd9;
+    ld.global.nc.u8 %rs9, [%rd10];
+    cvt.rn.f32.s8 %f3, %rs9;
+    mul.f32 %f4, %f3, %scale;
+    
+    sub.f32 %f5, %f2, %f4;
+    fma.rn.f32 %f29, %f5, %f5, %f29;
+    
+    add.s32 %r8, %r8, 1;
+    setp.lt.s32 %p2, %r8, %r3;
+    @%p2 bra $L__BB0_2;
+    
+    mul.lo.s32 %r13, %r7, %r2;
+    add.s32 %r14, %r13, %r6;
+    mul.wide.s32 %rd11, %r14, 4;
+    add.s64 %rd12, %rd6, %rd11;
+    st.global.f32 [%rd12], %f29;
+    
+$L__BB0_3:
+    ret;
+}
