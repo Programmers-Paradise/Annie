@@ -29,6 +29,12 @@ impl RustAnnError {
     }
 }
 
+impl fmt::Display for RustAnnError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 pub enum DistanceRegistryError {
     LockPoisoned,
     RegistryNotInitialized,
