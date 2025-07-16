@@ -5,10 +5,11 @@ The `PyHnswIndex` class provides approximate nearest neighbor search using Hiera
 
 ## Constructor
 
-### `PyHnswIndex(dims: int)`
+### `PyHnswIndex(dims: int, config: Optional[PyHnswConfig] = None)`
 Creates a new HNSW index initialized with the Euclidean distance metric.
 
 - `dims` (int): Vector dimension
+- `config` (Optional[PyHnswConfig]): Configuration for the HNSW index. If not provided, default settings are used.
 
 ## Methods
 
@@ -38,6 +39,12 @@ Load index from disk.
 
 ## New Features
 
+### `HnswConfig` and `PyHnswConfig`
+The `HnswConfig` struct and its Python counterpart `PyHnswConfig` allow for detailed configuration of the HNSW index. This includes parameters such as `m`, `ef_construction`, `ef_search`, and `max_elements`.
+
+### `validate` Method
+The `validate` method in `HnswConfig` ensures that the configuration parameters are valid before creating an index.
+
 ### `user_ids` Field
 The `HnswIndex` struct now includes a `user_ids` field, which stores user-defined IDs for the vectors. This allows for more flexible identification and retrieval of vectors within the index.
 
@@ -50,10 +57,14 @@ The library now supports a pluggable distance metric registry, allowing users to
 ## Example
 ```python
 import numpy as np
-from rust_annie import PyHnswIndex, register_metric, list_metrics
+from rust_annie import PyHnswIndex, PyHnswConfig, register_metric, list_metrics
 
-# Create index
-index = PyHnswIndex(dims=128)
+# Create a configuration
+config = PyHnswConfig(m=24, ef_construction=100, ef_search=128, max_elements=10000)
+config.validate()
+
+# Create the index using config
+index = PyHnswIndex(dims=128, config=config)
 
 # Add data
 data = np.random.rand(10000, 128).astype(np.float32)
@@ -165,9 +176,17 @@ neighbor_ids, distances = index.search(query, k=5)
 
 ### HNSW Index
 ```python 
-from rust_annie import PyHnswIndex
+from rust_annie import PyHnswIndex, PyHnswConfig
+import numpy as np
 
-index = PyHnswIndex(dims=128)
+# Create a configuration
+config = PyHnswConfig(m=24, ef_construction=100, ef_search=128, max_elements=10000)
+config.validate()
+
+# Create the index using config
+index = PyHnswIndex(dims=128, config=config)
+
+# Add data
 data = np.random.rand(10000, 128).astype(np.float32)
 ids = np.arange(10000, dtype=np.int64)
 index.add(data, ids)
@@ -317,6 +336,8 @@ Same API as `AnnIndex`, safe for concurrent use.
 | PyHnswIndex	     | Approximate HNSW index                     |
 | ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex          |
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc) |
+| Index              | Unified wrapper over AnnIndex and PyHnswIndex|
+| PyHnswConfig       | Configurable struct for HNSW               |
 
 ## Key Methods
 
