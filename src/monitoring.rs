@@ -207,6 +207,7 @@ fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector
         stream.write_all(response.as_bytes())?;
     } else {
         let response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\n\r\nNot Found";
+    }
 
         stream.write_all(response.as_bytes())?;
         Ok(())
