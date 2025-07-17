@@ -148,14 +148,29 @@ pub fn chebyshev(a: &[f32], b: &[f32]) -> f32 {
 
 pub fn minkowski(a: &[f32], b: &[f32], p: f32) -> f32 {
     assert_eq!(a.len(), b.len(), "Input slices must have the same length");
-    if p == 1.0 {
-        return manhattan(a, b);
-    } else if p == 2.0 {
-        return euclidean(a, b);
-    } else if p == f32::INFINITY {
-        return chebyshev(a, b);
+    if p == 1.0 || p == 2.0 || p == f32::INFINITY {
+        // Handle special cases inline to avoid redundant assertions and function calls
+        let mut acc = 0.0;
+        if p == 1.0 {
+            for (x, y) in a.iter().zip(b) {
+                acc += (x - y).abs();
+            }
+            return acc;
+        } else if p == 2.0 {
+            for (x, y) in a.iter().zip(b) {
+                acc += (x - y).powi(2);
+            }
+            return acc.sqrt();
+        } else {
+            for (x, y) in a.iter().zip(b) {
+                let diff = (x - y).abs();
+                if diff > acc {
+                    acc = diff;
+                }
+            }
+            return acc;
+        }
     }
-    
     a.iter()
         .zip(b)
         .map(|(x, y)| (x - y).abs().powf(p))
@@ -173,21 +188,14 @@ pub fn hamming(a: &[f32], b: &[f32]) -> f32 {
 
 pub fn jaccard(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Input slices must have the same length");
-    let mut intersection = 0.0;
-    let mut union = 0.0;
-    
-    for (x, y) in a.iter().zip(b) {
+    let (intersection, union) = a.iter().zip(b).fold((0.0, 0.0), |(i, u), (x, y)| {
         let x_bin = *x > 0.5;
         let y_bin = *y > 0.5;
-        
-        if x_bin && y_bin {
-            intersection += 1.0;
-        }
-        if x_bin || y_bin {
-            union += 1.0;
-        }
-    }
-    
+        (
+            i + if x_bin && y_bin { 1.0 } else { 0.0 },
+            u + if x_bin || y_bin { 1.0 } else { 0.0 },
+        )
+    });
     if union == 0.0 {
         0.0
     } else {
@@ -196,6 +204,7 @@ pub fn jaccard(a: &[f32], b: &[f32]) -> f32 {
 }
 
 pub fn angular(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len(), "Input slices must have the same length");
     let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
     let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
     let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
