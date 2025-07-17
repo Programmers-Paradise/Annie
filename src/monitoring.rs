@@ -173,13 +173,13 @@ impl MetricsServer {
                     Ok(stream) => {
                         let metrics_clone = Arc::clone(&metrics);
                         thread::spawn(move || {
-                            if let Err(e) = Self::handle_request(stream, metrics_clone) {
+                            if let Err(_e) = Self::handle_request(stream, metrics_clone) {
                                 #[cfg(debug_assertions)]
                                 eprintln!("Error handling metrics request: {}", e);
                             }
                         });
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         #[cfg(debug_assertions)]
                         eprintln!("Error accepting connection: {}", e);
                     }

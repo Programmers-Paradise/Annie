@@ -1,6 +1,5 @@
 use crate::metrics::Distance;
 use crate::distance_registry::get_distance_function;
-use std::path::Path;
 
 pub fn compute_distances_with_ids(
     entries: &[(i64, Vec<f32>, f32)],

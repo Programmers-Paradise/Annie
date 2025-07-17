@@ -142,7 +142,7 @@ impl AnnBackend for HnswIndex {
         let reader = BufReader::new(file);
         let data: HnswIndexData = bincode::deserialize_from(reader).expect("Deserialization failed");
 
-        let mut index = Hnsw::new(
+        let index = Hnsw::new(
             16,
             10_000,
             16,

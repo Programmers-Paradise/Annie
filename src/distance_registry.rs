@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use pyo3::prelude::*;
-use numpy::{IntoPyArray, PyArray1};
 
 use crate::errors::DistanceRegistryError;
 

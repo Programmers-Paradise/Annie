@@ -82,6 +82,7 @@ impl Distance {
             Distance::Angular()   => "Distance.ANGULAR".to_string(),
             Distance::Canberra()  => "Distance.CANBERRA".to_string(),
             Distance::Custom(name) => format!("Distance.custom('{}')", name),
+            _ => todo!("handle other Distance variants"),
         }
     }
 }
