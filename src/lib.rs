@@ -28,6 +28,66 @@ use crate::distance_registry::{register_metric, list_metrics, init_distance_regi
 use crate::monitoring::PyMetricsCollector;
 use pyo3::Bound;
 use pyo3::types::PyModule;
+use crate::hnsw_index::HnswConfig;
+
+#[pyclass(name = "HnswConfig")]
+#[derive(Clone)]
+pub struct PyHnswConfig {
+    #[pyo3(get, set)]
+    pub m: usize,
+    #[pyo3(get, set)]
+    pub ef_construction: usize,
+    #[pyo3(get, set)]
+    pub ef_search: usize,
+    #[pyo3(get, set)]
+    pub max_elements: usize,
+}
+
+#[pymethods]
+impl PyHnswConfig {
+    #[new]
+    pub fn new(
+        m: Option<usize>,
+        ef_construction: Option<usize>,
+        ef_search: Option<usize>,
+        max_elements: Option<usize>,
+    ) -> Self {
+        let default = HnswConfig::default();
+        PyHnswConfig {
+            m: m.unwrap_or(default.m),
+            ef_construction: ef_construction.unwrap_or(default.ef_construction),
+            ef_search: ef_search.unwrap_or(default.ef_search),
+            max_elements: max_elements.unwrap_or(default.max_elements),
+        }
+    }
+
+    #[staticmethod]
+    pub fn default() -> Self {
+        let default = HnswConfig::default();
+        PyHnswConfig {
+            m: default.m,
+            ef_construction: default.ef_construction,
+            ef_search: default.ef_search,
+            max_elements: default.max_elements,
+        }
+    }
+
+    pub fn validate(&self) -> PyResult<()> {
+        let config = self.to_config();
+        config.validate().map_err(|e| e.into_pyerr())
+    }
+}
+
+impl PyHnswConfig {
+    pub fn to_config(&self) -> HnswConfig {
+        HnswConfig {
+            m: self.m,
+            ef_construction: self.ef_construction,
+            ef_search: self.ef_search,
+            max_elements: self.max_elements,
+        }
+    }
+}
 
 #[pyclass]
 pub struct PyHnswIndex {
@@ -113,6 +173,7 @@ fn rust_annie(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHnswIndex>()?;
     m.add_class::<PyIndex>()?;
     m.add_class::<PyMetricsCollector>()?;
+    m.add_class::<PyHnswConfig>()?;
     m.add_function(wrap_pyfunction!(register_metric, m)?)?;
     m.add_function(wrap_pyfunction!(list_metrics, m)?)?;
     Ok(())

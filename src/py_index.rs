@@ -2,8 +2,6 @@ use pyo3::prelude::*;
 use numpy::PyReadonlyArray1;
 use crate::index_enum::Index;
 use crate::metrics::Distance;
-use crate::backend::AnnBackend;
-
 
 /// A unified Python-facing ANN Index supporting "brute" and "hnsw" backends.
 #[pyclass(name = "Index")]
@@ -15,10 +13,17 @@ pub struct PyIndex {
 impl PyIndex {
     /// Constructor: Index(kind="brute" | "hnsw", dim=128, metric=Distance.EUCLIDEAN)
     #[new]
+    #[pyo3(signature = (kind, dim, metric))]
     fn new(kind: &str, dim: usize, metric: Distance) -> PyResult<Self> {
         let index = match kind.to_lowercase().as_str() {
             "brute" => Index::BruteForce(crate::AnnIndex::new(dim, metric)?),
-            "hnsw" => Index::Hnsw(crate::HnswIndex::new(dim, metric)),
+            "hnsw" => {
+                // Default config: same values you hardcoded earlier
+                let config = crate::hnsw_index::HnswConfig::default();
+                let hnsw = crate::HnswIndex::new_with_config(dim, config)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                Index::Hnsw(hnsw)
+            }
             _ => {
                 return Err(pyo3::exceptions::PyValueError::new_err(format!(
                     "Unknown backend '{kind}'. Use 'brute' or 'hnsw'."

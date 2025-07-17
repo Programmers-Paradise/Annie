@@ -174,7 +174,7 @@ impl MetricsServer {
                         let metrics_clone = Arc::clone(&metrics);
                         thread::spawn(move || {
                             if let Err(e) = handle_request(stream, metrics_clone) {
-                                eprintln!("Error handling metrics request: {e}");
+                                eprintln!("Error handling metrics request: {e}")
                             }
                         });
                     }
@@ -187,7 +187,6 @@ impl MetricsServer {
 
         Ok(())
     }
-}
 
 fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
     let mut buffer = [0; 1024];
@@ -208,10 +207,10 @@ fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector
         stream.write_all(response.as_bytes())?;
     } else {
         let response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\n\r\nNot Found";
-        stream.write_all(response.as_bytes())?;
-    }
 
-    Ok(())
+        stream.write_all(response.as_bytes())?;
+        Ok(())
+    }
 }
 
 /// Python-facing metrics interface

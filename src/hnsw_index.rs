@@ -6,6 +6,44 @@ use hnsw_rs::prelude::*;
 use crate::backend::AnnBackend;
 use crate::metrics::Distance;
 use crate::utils::validate_path;
+use crate::errors::RustAnnError;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HnswConfig {
+    pub m: usize,
+    pub ef_construction: usize,
+    pub ef_search: usize,
+    pub max_elements: usize,
+}
+
+impl Default for HnswConfig {
+    fn default() -> Self {
+        Self {
+            m: 16,
+            ef_construction: 16,
+            ef_search: 200,
+            max_elements: 10_000,
+        }
+    }
+}
+
+impl HnswConfig {
+    pub fn validate(&self) -> Result<(), RustAnnError> {
+        if self.m == 0 {
+            return Err(RustAnnError::io_err("`m` must be greater than 0"));
+        }
+        if self.ef_construction == 0 {
+            return Err(RustAnnError::io_err("`ef_construction` must be greater than 0"));
+        }
+        if self.ef_search == 0 {
+            return Err(RustAnnError::io_err("`ef_search` must be greater than 0"));
+        }
+        if self.max_elements == 0 {
+            return Err(RustAnnError::io_err("`max_elements` must be greater than 0"));
+        }
+        Ok(())
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 struct HnswIndexData {
@@ -21,21 +59,50 @@ pub struct HnswIndex {
     vectors: Vec<Vec<f32>>, // Added field
 }
 
-impl AnnBackend for HnswIndex {
-    fn new(dims: usize, _distance: Distance) -> Self {
+impl HnswIndex {
+    pub fn new_with_config(dims: usize, config: HnswConfig) -> Result<Self, RustAnnError> {
+        config.validate()?;
+
         let index = Hnsw::new(
-            16,     // M
-            10_000, // max elements
-            16,     // ef_construction
-            200,    // ef_search
+            config.m,
+            config.max_elements,
+            config.ef_construction,
+            config.ef_search,
             DistL2 {},
         );
-        HnswIndex {
+
+        Ok(HnswIndex {
             index,
             dims,
             user_ids: Vec::new(),
-            vectors: Vec::new(), // Initialize new field
+            vectors: Vec::new(),
+        })
+    }
+
+    pub fn insert(&mut self, item: &[f32], user_id: i64) {
+        let internal_id = self.user_ids.len();
+        self.index.insert((item, internal_id));
+        self.user_ids.push(user_id);
+        self.vectors.push(item.to_vec());
+    }
+
+    pub fn dims(&self) -> usize {
+        self.dims
+    }
+
+    pub fn get_user_id(&self, internal_id: usize) -> i64 {
+        if internal_id < self.user_ids.len() {
+            self.user_ids[internal_id]
+        } else {
+            -1
         }
+    }
+}
+
+impl AnnBackend for HnswIndex {
+    fn new(dims: usize, _distance: Distance) -> Self {
+        HnswIndex::new_with_config(dims, HnswConfig::default())
+            .expect("Failed to create HNSW index with default config")
     }
 
     fn add_item(&mut self, item: Vec<f32>) {
@@ -96,23 +163,3 @@ impl AnnBackend for HnswIndex {
     }
 }
 
-impl HnswIndex {
-    pub fn insert(&mut self, item: &[f32], user_id: i64) {
-        let internal_id = self.user_ids.len();
-        self.index.insert((item, internal_id));
-        self.user_ids.push(user_id);
-        self.vectors.push(item.to_vec());
-    }
-
-    pub fn dims(&self) -> usize {
-        self.dims
-    }
-
-    pub fn get_user_id(&self, internal_id: usize) -> i64 {
-        if internal_id < self.user_ids.len() {
-            self.user_ids[internal_id]
-        } else {
-            -1
-        }
-    }
-}
