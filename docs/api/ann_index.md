@@ -5,10 +5,10 @@ The `AnnIndex` class provides efficient brute-force nearest neighbor search with
 ## Constructor
 
 ### `AnnIndex(dim: int, metric: Distance)`
-Creates a new brute-force index for unit-variant metrics (Euclidean, Cosine, Manhattan, Chebyshev).
+Creates a new brute-force index for unit-variant metrics (Euclidean, Cosine, Manhattan, Chebyshev, Hamming, Jaccard, Angular, Canberra).
 
 - `dim` (int): Vector dimension. Must be greater than 0.
-- `metric` (Distance): Distance metric to use for similarity computation. Options: `Distance.Euclidean()`, `Distance.Cosine()`, `Distance.Manhattan()`, `Distance.Chebyshev()`.
+- `metric` (Distance): Distance metric to use for similarity computation. Options: `Distance.Euclidean()`, `Distance.Cosine()`, `Distance.Manhattan()`, `Distance.Chebyshev()`, `Distance.Hamming()`, `Distance.Jaccard()`, `Distance.Angular()`, `Distance.Canberra()`.
 - Returns: `AnnIndex`: A new empty index instance.
 - Raises: `RustAnnError`: If dimension is 0 or invalid.
 
@@ -17,6 +17,10 @@ Example:
 from annindex import AnnIndex, Distance
 index = AnnIndex(128, Distance.Euclidean())
 index = AnnIndex(256, Distance.Cosine())
+index = AnnIndex(128, Distance.Hamming())
+index = AnnIndex(128, Distance.Jaccard())
+index = AnnIndex(128, Distance.Angular())
+index = AnnIndex(128, Distance.Canberra())
 ```
 
 ### `new_minkowski(dim: int, p: float)`
@@ -37,7 +41,7 @@ index = AnnIndex.new_minkowski(64, 3.0)
 Creates a new index using a custom distance metric by name.
 
 - `dim` (int): Vector dimension. Must be greater than 0.
-- `metric_name` (str): Name of the distance metric to use. Can be built-in ("euclidean", "cosine", "manhattan", "chebyshev") or a custom metric registered via `register_metric()`.
+- `metric_name` (str): Name of the distance metric to use. Can be built-in ("euclidean", "cosine", "manhattan", "chebyshev", "hamming", "jaccard", "angular", "canberra") or a custom metric registered via `register_metric()`.
 - Returns: `AnnIndex`: A new empty index instance.
 - Raises: `RustAnnError`: If dimension is 0 or invalid.
 
@@ -260,7 +264,7 @@ neighbor_ids, distances = index.search(query, k=5)
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
   - **GPU** (exact) for high-performance brute-force calculations
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and custom metrics
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, Hamming, Jaccard, Angular, Canberra, and custom metrics
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
