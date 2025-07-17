@@ -6,7 +6,7 @@ The `PyHnswIndex` class provides approximate nearest neighbor search using Hiera
 ## Constructor
 
 ### `PyHnswIndex(dims: int, config: Optional[PyHnswConfig] = None)`
-Creates a new HNSW index initialized with the Euclidean distance metric.
+Creates a new HNSW index initialized with the Euclidean distance metric by default, but now supports multiple distance metrics.
 
 - `dims` (int): Vector dimension
 - `config` (Optional[PyHnswConfig]): Configuration for the HNSW index. If not provided, default settings are used.
@@ -53,6 +53,9 @@ The `py_annindex` macro is used to automatically generate Python bindings for th
 
 ### Pluggable Distance Metric Registry
 The library now supports a pluggable distance metric registry, allowing users to register custom distance metrics for use in the index. This feature enhances flexibility in defining how distances between vectors are calculated.
+
+### New Distance Metrics
+The `HnswIndex` class now supports additional distance metrics, including Hamming, Jaccard, Angular, and Canberra distances, in addition to the existing Euclidean, Cosine, Manhattan, and Chebyshev metrics.
 
 ## Example
 ```python
@@ -128,7 +131,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and custom metrics
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, Hamming, Jaccard, Angular, Canberra, and custom metrics
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
@@ -322,7 +325,7 @@ You’ll find:
 
 - **Constructor**: `AnnIndex(dims: int, distance: Distance)`
 - **Methods**: `add`, `search`, `search_batch`, `save`, `load`
-- **Distance Metrics**: Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, and custom metrics
+- **Distance Metrics**: Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, `Distance.HAMMING`, `Distance.JACCARD`, `Distance.ANGULAR`, `Distance.CANBERRA`, and custom metrics
 
 ### ThreadSafeAnnIndex
 
