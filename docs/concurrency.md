@@ -8,7 +8,7 @@ Annie exposes a thread-safe version of its ANN index (`AnnIndex`) for use in Pyt
 - Exclusive write access (`add`, `remove`)
 - Backed by Rust `RwLock` and exposed via PyO3
 - `PyHnswIndex` supports mapping internal IDs to user IDs and handling vector data efficiently
-- Enhanced error handling for read lock acquisition
+- Enhanced error handling for read and write lock acquisition
 
 ## Example
 
@@ -82,7 +82,7 @@ The `AnnIndex` class provides efficient brute-force nearest neighbor search with
 Creates a new brute-force index.
 
 - `dim` (int): Vector dimension
-- `metric` (Distance): Distance metric (`EUCLIDEAN`, `COSINE`, `MANHATTAN`, `CHEBYSHEV`)
+- `metric` (Distance): Distance metric (`EUCLIDEAN`, `COSINE`, `MANHATTAN`, `CHEBYSHEV`, `HAMMING`, `JACCARD`, `ANGULAR`, `CANBERRA`)
 
 ### `new_minkowski(dim: int, p: float)`
 Creates a Minkowski distance index.

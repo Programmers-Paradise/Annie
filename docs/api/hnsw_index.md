@@ -5,10 +5,11 @@ The `PyHnswIndex` class provides approximate nearest neighbor search using Hiera
 
 ## Constructor
 
-### `PyHnswIndex(dims: int)`
-Creates a new HNSW index initialized with the Euclidean distance metric.
+### `PyHnswIndex(dims: int, config: Optional[PyHnswConfig] = None)`
+Creates a new HNSW index initialized with the Euclidean distance metric by default, but now supports multiple distance metrics.
 
 - `dims` (int): Vector dimension
+- `config` (Optional[PyHnswConfig]): Configuration for the HNSW index. If not provided, default settings are used.
 
 ## Methods
 
@@ -38,6 +39,12 @@ Load index from disk.
 
 ## New Features
 
+### `HnswConfig` and `PyHnswConfig`
+The `HnswConfig` struct and its Python counterpart `PyHnswConfig` allow for detailed configuration of the HNSW index. This includes parameters such as `m`, `ef_construction`, `ef_search`, and `max_elements`.
+
+### `validate` Method
+The `validate` method in `HnswConfig` ensures that the configuration parameters are valid before creating an index.
+
 ### `user_ids` Field
 The `HnswIndex` struct now includes a `user_ids` field, which stores user-defined IDs for the vectors. This allows for more flexible identification and retrieval of vectors within the index.
 
@@ -47,13 +54,20 @@ The `py_annindex` macro is used to automatically generate Python bindings for th
 ### Pluggable Distance Metric Registry
 The library now supports a pluggable distance metric registry, allowing users to register custom distance metrics for use in the index. This feature enhances flexibility in defining how distances between vectors are calculated.
 
+### New Distance Metrics
+The `HnswIndex` class now supports additional distance metrics, including Hamming, Jaccard, Angular, and Canberra distances, in addition to the existing Euclidean, Cosine, Manhattan, and Chebyshev metrics.
+
 ## Example
 ```python
 import numpy as np
-from rust_annie import PyHnswIndex, register_metric, list_metrics
+from rust_annie import PyHnswIndex, PyHnswConfig, register_metric, list_metrics
 
-# Create index
-index = PyHnswIndex(dims=128)
+# Create a configuration
+config = PyHnswConfig(m=24, ef_construction=100, ef_search=128, max_elements=10000)
+config.validate()
+
+# Create the index using config
+index = PyHnswIndex(dims=128, config=config)
 
 # Add data
 data = np.random.rand(10000, 128).astype(np.float32)
@@ -117,7 +131,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and custom metrics
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, Hamming, Jaccard, Angular, Canberra, and custom metrics
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
@@ -165,9 +179,17 @@ neighbor_ids, distances = index.search(query, k=5)
 
 ### HNSW Index
 ```python 
-from rust_annie import PyHnswIndex
+from rust_annie import PyHnswIndex, PyHnswConfig
+import numpy as np
 
-index = PyHnswIndex(dims=128)
+# Create a configuration
+config = PyHnswConfig(m=24, ef_construction=100, ef_search=128, max_elements=10000)
+config.validate()
+
+# Create the index using config
+index = PyHnswIndex(dims=128, config=config)
+
+# Add data
 data = np.random.rand(10000, 128).astype(np.float32)
 ids = np.arange(10000, dtype=np.int64)
 index.add(data, ids)
@@ -303,7 +325,7 @@ You’ll find:
 
 - **Constructor**: `AnnIndex(dims: int, distance: Distance)`
 - **Methods**: `add`, `search`, `search_batch`, `save`, `load`
-- **Distance Metrics**: Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, and custom metrics
+- **Distance Metrics**: Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, `Distance.HAMMING`, `Distance.JACCARD`, `Distance.ANGULAR`, `Distance.CANBERRA`, and custom metrics
 
 ### ThreadSafeAnnIndex
 
@@ -317,6 +339,8 @@ Same API as `AnnIndex`, safe for concurrent use.
 | PyHnswIndex	     | Approximate HNSW index                     |
 | ThreadSafeAnnIndex | 	Thread-safe wrapper for AnnIndex          |
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc) |
+| Index              | Unified wrapper over AnnIndex and PyHnswIndex|
+| PyHnswConfig       | Configurable struct for HNSW               |
 
 ## Key Methods
 

@@ -8,7 +8,7 @@ The `ThreadSafeAnnIndex` class provides a thread-safe wrapper around `AnnIndex` 
 Creates a new thread-safe index.
 
 - `dim` (int): Vector dimension
-- `metric` (Distance): Distance metric
+- `metric` (Distance): Distance metric, now supporting additional metrics such as Hamming, Jaccard, Angular, and Canberra.
 
 ### `from_arc(inner: Arc<RwLock<AnnIndex>>) -> ThreadSafeAnnIndex`
 Internal constructor for testing: wraps an existing `Arc<RwLock<AnnIndex>>`.
@@ -80,7 +80,7 @@ print(filtered_ids)
 | AnnIndex	         | Brute-force exact search                   |
 | PyHnswIndex	     | Approximate HNSW index                     |
 | ThreadSafeAnnIndex | Thread-safe wrapper for AnnIndex           |
-| Distance           | Distance metrics (Euclidean, Cosine, etc)  |
+| Distance           | Distance metrics (Euclidean, Cosine, Hamming, Jaccard, Angular, Canberra, etc)  |
 
 ## Key Methods
 
