@@ -13,6 +13,16 @@ pub enum Distance {
     Manhattan(),
     /// Chebyshev (L∞)
     Chebyshev(),
+    /// Hamming distance (for binary/categorical data)
+    Hamming(),
+    /// Jaccard distance (for set similarity)
+    Jaccard(),
+    /// Angular distance (normalized cosine)
+    Angular(),
+    /// Canberra distance (weighted Manhattan)
+    Canberra(),
+    /// Minkowski distance (parameterized Lp norm)
+    Minkowski(f32),
     /// Custom metric identified by name
     Custom(String),
 }
@@ -23,6 +33,10 @@ impl Distance {
     #[classattr] pub const COSINE:    Distance = Distance::Cosine();
     #[classattr] pub const MANHATTAN: Distance = Distance::Manhattan();
     #[classattr] pub const CHEBYSHEV: Distance = Distance::Chebyshev();
+    #[classattr] pub const HAMMING:   Distance = Distance::Hamming();
+    #[classattr] pub const JACCARD:   Distance = Distance::Jaccard();
+    #[classattr] pub const ANGULAR:   Distance = Distance::Angular();
+    #[classattr] pub const CANBERRA:  Distance = Distance::Canberra();
 
     #[new]
     pub fn new(name: &str) -> Self {
@@ -31,6 +45,10 @@ impl Distance {
             "cosine" => Distance::Cosine(),
             "manhattan" => Distance::Manhattan(),
             "chebyshev" => Distance::Chebyshev(),
+            "hamming" => Distance::Hamming(),
+            "jaccard" => Distance::Jaccard(),
+            "angular" => Distance::Angular(),
+            "canberra" => Distance::Canberra(),
             _ => Distance::Custom(name.to_string()),
         }
     }
@@ -41,6 +59,12 @@ impl Distance {
         Distance::Custom(name.to_string())
     }
 
+    /// Create a Minkowski distance with parameter p.
+    #[staticmethod]
+    pub fn minkowski(p: f32) -> Self {
+        Distance::Minkowski(p)
+    }
+
     /// Get the name of the distance metric.
     pub fn name(&self) -> String {
         match self {
@@ -48,6 +72,11 @@ impl Distance {
             Distance::Cosine() => "cosine".to_string(),
             Distance::Manhattan() => "manhattan".to_string(),
             Distance::Chebyshev() => "chebyshev".to_string(),
+            Distance::Hamming() => "hamming".to_string(),
+            Distance::Jaccard() => "jaccard".to_string(),
+            Distance::Angular() => "angular".to_string(),
+            Distance::Canberra() => "canberra".to_string(),
+            Distance::Minkowski(p) => format!("minkowski_p{p}"),
             Distance::Custom(name) => name.clone(),
         }
     }
@@ -58,7 +87,12 @@ impl Distance {
             Distance::Cosine()    => "Distance.COSINE".to_string(),
             Distance::Manhattan() => "Distance.MANHATTAN".to_string(),
             Distance::Chebyshev() => "Distance.CHEBYSHEV".to_string(),
-            Distance::Custom(name) => format!("Distance.custom('{}')", name),
+            Distance::Hamming()   => "Distance.HAMMING".to_string(),
+            Distance::Jaccard()   => "Distance.JACCARD".to_string(),
+            Distance::Angular()   => "Distance.ANGULAR".to_string(),
+            Distance::Canberra()  => "Distance.CANBERRA".to_string(),
+            Distance::Minkowski(p) => format!("Distance.minkowski({p})"),
+            Distance::Custom(name) => format!("Distance.custom('{name}')"),
         }
     }
 }
@@ -76,7 +110,32 @@ impl Distance {
             Distance::Cosine() => "cosine".to_string(),
             Distance::Manhattan() => "manhattan".to_string(),
             Distance::Chebyshev() => "chebyshev".to_string(),
+            Distance::Hamming() => "hamming".to_string(),
+            Distance::Jaccard() => "jaccard".to_string(),
+            Distance::Angular() => "angular".to_string(),
+            Distance::Canberra() => "canberra".to_string(),
+            Distance::Minkowski(p) => format!("minkowski_p{p}"),
             Distance::Custom(name) => name.clone(),
+        }
+    }
+
+    /// Compute distance between two vectors using this metric
+    pub fn compute(&self, a: &[f32], b: &[f32]) -> f32 {
+        match self {
+            Distance::Euclidean() => euclidean(a, b),
+            Distance::Cosine() => cosine(a, b),
+            Distance::Manhattan() => manhattan(a, b),
+            Distance::Chebyshev() => chebyshev(a, b),
+            Distance::Hamming() => hamming(a, b),
+            Distance::Jaccard() => jaccard(a, b),
+            Distance::Angular() => angular(a, b),
+            Distance::Canberra() => canberra(a, b),
+            Distance::Minkowski(p) => minkowski(a, b, *p),
+            Distance::Custom(_) => {
+                // For custom metrics, fallback to registry lookup
+                // This should not be called directly in normal operation
+                euclidean(a, b) // fallback
+            }
         }
     }
 }
@@ -85,6 +144,7 @@ pub fn euclidean(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Input slices must have the same length");
     a.iter().zip(b).map(|(x, y)| (x - y).powi(2)).sum::<f32>().sqrt()
 }
+
 pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
     let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
     let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>();
@@ -94,11 +154,97 @@ pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
     }
     1.0 - dot_product / (norm_a * norm_b).sqrt()
 }
+
 pub fn manhattan(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Input slices must have the same length");
     a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum()
 }
+
 pub fn chebyshev(a: &[f32], b: &[f32]) -> f32 {
     assert_eq!(a.len(), b.len(), "Input slices must have the same length");
     a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max)
+}
+
+/// Hamming distance - counts the number of positions where the elements differ
+pub fn hamming(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len(), "Input slices must have the same length");
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| if (x - y).abs() > 1e-5 { 1.0 } else { 0.0 })
+        .sum()
+}
+
+/// Jaccard distance - 1 - Jaccard similarity for binary data
+pub fn jaccard(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len(), "Input slices must have the same length");
+    
+    let mut intersection = 0.0;
+    let mut union = 0.0;
+    
+    for (x, y) in a.iter().zip(b) {
+        let x_bin = *x > 0.5;
+        let y_bin = *y > 0.5;
+        
+        if x_bin && y_bin {
+            intersection += 1.0;
+        }
+        if x_bin || y_bin {
+            union += 1.0;
+        }
+    }
+    
+    if union == 0.0 {
+        0.0
+    } else {
+        1.0 - (intersection / union)
+    }
+}
+
+/// Angular distance - the angle between two vectors in radians
+pub fn angular(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len(), "Input slices must have the same length");
+    
+    let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
+    let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+    let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+    
+    if norm_a == 0.0 || norm_b == 0.0 {
+        return std::f32::consts::FRAC_PI_2; // 90 degrees in radians
+    }
+    
+    let cosine_sim = dot_product / (norm_a * norm_b);
+    cosine_sim.clamp(-1.0, 1.0).acos()
+}
+
+/// Canberra distance - weighted Manhattan distance
+pub fn canberra(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len(), "Input slices must have the same length");
+    
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| {
+            let diff = (x - y).abs();
+            let denom = x.abs() + y.abs();
+            if denom > 0.0 { diff / denom } else { 0.0 }
+        })
+        .sum()
+}
+
+/// Minkowski distance - generalized Lp norm
+pub fn minkowski(a: &[f32], b: &[f32], p: f32) -> f32 {
+    assert_eq!(a.len(), b.len(), "Input slices must have the same length");
+    
+    if p == 1.0 {
+        return manhattan(a, b);
+    } else if p == 2.0 {
+        return euclidean(a, b);
+    } else if p == f32::INFINITY {
+        return chebyshev(a, b);
+    }
+    
+    a.iter()
+        .zip(b)
+        .map(|(x, y)| (x - y).abs().powf(p))
+        .sum::<f32>()
+        .powf(1.0 / p)
 }

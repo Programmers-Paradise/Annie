@@ -62,7 +62,7 @@ impl PyHnswIndex {
         let shape = data.shape();
         if shape.len() != 2 || shape[1] != dims {
             return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Input data must be of shape (n, {})", dims),
+                format!("Input data must be of shape (n, {dims})"),
             ));
         }
 

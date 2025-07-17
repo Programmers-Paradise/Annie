@@ -176,13 +176,18 @@ impl AnnIndex {
         // Update metrics if enabled
         if let Some(metrics) = &self.metrics {
             let metric_name = if let Some(p) = self.minkowski_p {
-                format!("minkowski_p{}", p)
+                format!("minkowski_p{p}")
             } else {
                 match &self.metric {
                     Distance::Euclidean() => "euclidean".to_string(),
                     Distance::Cosine() => "cosine".to_string(),
                     Distance::Manhattan() => "manhattan".to_string(),
                     Distance::Chebyshev() => "chebyshev".to_string(),
+                    Distance::Hamming() => "hamming".to_string(),
+                    Distance::Jaccard() => "jaccard".to_string(),
+                    Distance::Angular() => "angular".to_string(),
+                    Distance::Canberra() => "canberra".to_string(),
+                    Distance::Minkowski(p) => format!("minkowski_p{p}"),
                     Distance::Custom(name) => name.clone(),
                 }
             };
@@ -310,7 +315,7 @@ impl AnnIndex {
                 let q: Vec<f32> = row.to_vec();
                 let q_sq = q.iter().map(|x| x * x).sum::<f32>();
                 self.inner_search(&q, q_sq, k)
-                   .map_err(|e| RustAnnError::io_err(format!("Parallel search failed: {}", e)))
+                   .map_err(|e| RustAnnError::io_err(format!("Parallel search failed: {e}")))
             })
             .collect()
         });
@@ -321,9 +326,9 @@ impl AnnIndex {
         let (all_ids, all_dists): (Vec<_>, Vec<_>) = results.into_iter().unzip();
         
         let ids_arr: Array2<i64> = Array2::from_shape_vec((n, k), all_ids.concat())
-            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape ids failed: {}", e)))?;
+            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape ids failed: {e}")))?;
         let dists_arr: Array2<f32> = Array2::from_shape_vec((n, k), all_dists.concat())
-            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
+            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {e}")))?;
         
         Ok((
             ids_arr.into_pyarray(py).into(),
@@ -348,7 +353,7 @@ impl AnnIndex {
     ///     >>> index.save("/path/to/index")  # Saves to "/path/to/index.bin"
     pub fn save(&self, path: &str) -> PyResult<()> {
         Self::validate_path(path)?;
-        let full = format!("{}.bin", path);
+        let full = format!("{path}.bin");
         save_index(self, &full).map_err(|e| e.into_pyerr())
     }
 
@@ -373,7 +378,7 @@ impl AnnIndex {
     ///     >>> index = AnnIndex.load("/path/to/index")  # Loads from "/path/to/index.bin"
     pub fn load(path: &str) -> PyResult<Self> {
         Self::validate_path(path)?;
-        let full = format!("{}.bin", path);
+        let full = format!("{path}.bin");
         load_index(&full).map_err(|e| e.into_pyerr())
     }
 
@@ -389,6 +394,11 @@ impl AnnIndex {
     ///     1000
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    /// Check if the index is empty (contains no entries).
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 
     /// Get the dimension of vectors stored in the index.
@@ -428,7 +438,7 @@ impl AnnIndex {
     ///     AnnIndex(dim=128, metric=Euclidean, entries=1000)
     pub fn __repr__(&self) -> String {
         let metric_str = if let Some(p) = self.minkowski_p {
-            format!("Minkowski(p={})", p)
+            format!("Minkowski(p={p})")
         } else {
             format!("{:?}", self.metric)
         };
@@ -449,13 +459,18 @@ impl AnnIndex {
         
         // Update initial metadata
         let metric_name = if let Some(p) = self.minkowski_p {
-            format!("minkowski_p{}", p)
+            format!("minkowski_p{p}")
         } else {
             match &self.metric {
                 Distance::Euclidean() => "euclidean".to_string(),
                 Distance::Cosine() => "cosine".to_string(),
                 Distance::Manhattan() => "manhattan".to_string(),
                 Distance::Chebyshev() => "chebyshev".to_string(),
+                Distance::Hamming() => "hamming".to_string(),
+                Distance::Jaccard() => "jaccard".to_string(),
+                Distance::Angular() => "angular".to_string(),
+                Distance::Canberra() => "canberra".to_string(),
+                Distance::Minkowski(p) => format!("minkowski_p{p}"),
                 Distance::Custom(name) => name.clone(),
             }
         };
@@ -468,7 +483,7 @@ impl AnnIndex {
             let server = MetricsServer::new(Arc::clone(&metrics), port);
             server.start().map_err(|e| {
                 PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-                    format!("Failed to start metrics server: {}", e)
+                    format!("Failed to start metrics server: {e}")
                 )
             })?;
         }

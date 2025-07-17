@@ -33,7 +33,7 @@ impl ThreadSafeAnnIndex {
         ids: PyReadonlyArray1<i64>,
     ) -> PyResult<()> {
         let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {e}"))
         })?;
         guard.add(py, data, ids)
     }
@@ -41,7 +41,7 @@ impl ThreadSafeAnnIndex {
     /// Remove by ID.
     pub fn remove(&self, _py: Python, ids: Vec<i64>) -> PyResult<()> {
         let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {e}"))
         })?;
         guard.remove(ids)
     }
@@ -54,7 +54,7 @@ impl ThreadSafeAnnIndex {
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
         let guard = self.inner.read().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {e}"))
         })?;
         guard.search(py, query, k)
     }
@@ -67,7 +67,7 @@ impl ThreadSafeAnnIndex {
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
         let guard = self.inner.read().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {e}"))
         })?;
         guard.search_batch(py, data, k)
     }
@@ -75,7 +75,7 @@ impl ThreadSafeAnnIndex {
     /// Save to disk.
     pub fn save(&self, _py: Python, path: &str) -> PyResult<()> {
         let guard = self.inner.read().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {e}"))
         })?;
         guard.save(path)
     }

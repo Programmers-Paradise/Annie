@@ -1,6 +1,5 @@
 use crate::metrics::Distance;
 use crate::distance_registry::get_distance_function;
-use std::path::Path;
 
 pub fn compute_distances_with_ids(
     entries: &[(i64, Vec<f32>, f32)],
@@ -28,6 +27,39 @@ pub fn compute_distances_with_ids(
                     }
                     Distance::Manhattan() => vec.iter().zip(query).map(|(x, y)| (x - y).abs()).sum(),
                     Distance::Chebyshev() => vec.iter().zip(query).map(|(x, y)| (x - y).abs()).fold(0.0, f32::max),
+                    Distance::Hamming() => vec.iter().zip(query).map(|(x, y)| if (x - y).abs() > 1e-5 { 1.0 } else { 0.0 }).sum(),
+                    Distance::Jaccard() => {
+                        let mut intersection = 0.0;
+                        let mut union = 0.0;
+                        for (x, y) in vec.iter().zip(query) {
+                            let x_bin = *x > 0.5;
+                            let y_bin = *y > 0.5;
+                            if x_bin && y_bin { intersection += 1.0; }
+                            if x_bin || y_bin { union += 1.0; }
+                        }
+                        if union == 0.0 { 0.0 } else { 1.0 - (intersection / union) }
+                    }
+                    Distance::Angular() => {
+                        let dot_product = dot(vec, query);
+                        let norm_vec = vec_sq.sqrt();
+                        let norm_query = query_sq_norm.sqrt();
+                        if norm_vec == 0.0 || norm_query == 0.0 {
+                            std::f32::consts::FRAC_PI_2
+                        } else {
+                            let cosine_sim = dot_product / (norm_vec * norm_query);
+                            cosine_sim.clamp(-1.0, 1.0).acos()
+                        }
+                    }
+                    Distance::Canberra() => {
+                        vec.iter().zip(query).map(|(x, y)| {
+                            let diff = (x - y).abs();
+                            let denom = x.abs() + y.abs();
+                            if denom > 0.0 { diff / denom } else { 0.0 }
+                        }).sum()
+                    }
+                    Distance::Minkowski(p) => {
+                        vec.iter().zip(query).map(|(x, y)| (x - y).abs().powf(*p)).sum::<f32>().powf(1.0 / p)
+                    }
                     Distance::Custom(name) => {
                         // Use the registry to get the custom distance function
                         if let Some(distance_func) = get_distance_function(name) {

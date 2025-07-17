@@ -98,6 +98,126 @@ impl DistanceFunction for ChebyshevDistance {
     }
 }
 
+// ===== NEW DISTANCE METRICS START HERE =====
+
+#[derive(Clone)]
+pub struct HammingDistance;
+
+impl DistanceFunction for HammingDistance {
+    fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
+        if a.len() != b.len() {
+            return f32::MAX;
+        }
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| if (x - y).abs() > 1e-5 { 1.0 } else { 0.0 })
+            .sum()
+    }
+    
+    fn name(&self) -> &str {
+        "hamming"
+    }
+    
+    fn clone_boxed(&self) -> Box<dyn DistanceFunction> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct JaccardDistance;
+
+impl DistanceFunction for JaccardDistance {
+    fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
+        if a.len() != b.len() {
+            return f32::MAX;
+        }
+        
+        let mut intersection = 0.0;
+        let mut union = 0.0;
+        
+        for (x, y) in a.iter().zip(b) {
+            let x_bin = *x > 0.5;
+            let y_bin = *y > 0.5;
+            
+            if x_bin && y_bin {
+                intersection += 1.0;
+            }
+            if x_bin || y_bin {
+                union += 1.0;
+            }
+        }
+        
+        if union == 0.0 {
+            0.0
+        } else {
+            1.0 - (intersection / union)
+        }
+    }
+    
+    fn name(&self) -> &str {
+        "jaccard"
+    }
+    
+    fn clone_boxed(&self) -> Box<dyn DistanceFunction> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct AngularDistance;
+
+impl DistanceFunction for AngularDistance {
+    fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
+        let dot_product = a.iter().zip(b).map(|(x, y)| x * y).sum::<f32>();
+        let norm_a = a.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+        let norm_b = b.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+        
+        if norm_a == 0.0 || norm_b == 0.0 {
+            return std::f32::consts::FRAC_PI_2; // 90 degrees in radians
+        }
+        
+        let cosine_sim = dot_product / (norm_a * norm_b);
+        cosine_sim.clamp(-1.0, 1.0).acos()
+    }
+    
+    fn name(&self) -> &str {
+        "angular"
+    }
+    
+    fn clone_boxed(&self) -> Box<dyn DistanceFunction> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Clone)]
+pub struct CanberraDistance;
+
+impl DistanceFunction for CanberraDistance {
+    fn distance(&self, a: &[f32], b: &[f32]) -> f32 {
+        if a.len() != b.len() {
+            return f32::MAX;
+        }
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| {
+                let diff = (x - y).abs();
+                let denom = x.abs() + y.abs();
+                if denom > 0.0 { diff / denom } else { 0.0 }
+            })
+            .sum()
+    }
+    
+    fn name(&self) -> &str {
+        "canberra"
+    }
+    
+    fn clone_boxed(&self) -> Box<dyn DistanceFunction> {
+        Box::new(self.clone())
+    }
+}
+
+// ===== NEW DISTANCE METRICS END HERE =====
+
 /// A distance function that wraps a Python callable.
 pub struct PythonDistanceFunction {
     name: String,
@@ -148,6 +268,12 @@ pub struct DistanceRegistry {
     functions: HashMap<String, Box<dyn DistanceFunction>>,
 }
 
+impl Default for DistanceRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DistanceRegistry {
     pub fn new() -> Self {
         let mut registry = Self {
@@ -160,6 +286,12 @@ impl DistanceRegistry {
         registry.register("manhattan", Box::new(ManhattanDistance));
         registry.register("chebyshev", Box::new(ChebyshevDistance));
         
+        // Register new distance metrics
+        registry.register("hamming", Box::new(HammingDistance));
+        registry.register("jaccard", Box::new(JaccardDistance));
+        registry.register("angular", Box::new(AngularDistance));
+        registry.register("canberra", Box::new(CanberraDistance));
+        
         registry
     }
     
@@ -168,7 +300,7 @@ impl DistanceRegistry {
     }
     
     pub fn get(&self, name: &str) -> Option<Box<dyn DistanceFunction>> {
-        self.functions.get(name).map(|f| f.clone())
+        self.functions.get(name).cloned()
     }
     
     pub fn list_metrics(&self) -> Vec<String> {
@@ -216,7 +348,7 @@ pub fn list_distance_metrics() -> Vec<String> {
 pub fn register_metric(name: &str, func: PyObject) -> PyResult<()> {
     let distance_func = PythonDistanceFunction::new(name.to_string(), func);
     register_distance_function(name, Box::new(distance_func))
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e))
+        .map_err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>)
 }
 
 /// Python function to list all available distance metrics.

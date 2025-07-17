@@ -21,7 +21,7 @@ impl PyIndex {
             "hnsw" => Index::Hnsw(crate::HnswIndex::new(dim, metric)),
             _ => {
                 return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                    "Unknown backend '{}'. Use 'brute' or 'hnsw'.", kind
+                    "Unknown backend '{kind}'. Use 'brute' or 'hnsw'."
                 )));
             }
         };

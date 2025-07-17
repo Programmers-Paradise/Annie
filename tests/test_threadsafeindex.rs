@@ -27,12 +27,12 @@ fn test_search_batch_poisoned_lock() {
     let wrapped = ThreadSafeAnnIndex::from_arc(lock);
 
     Python::with_gil(|py| {
-        let arr = vec![[1.0_f32, 2.0], [3.0, 4.0]];
+        let arr = [[1.0_f32, 2.0], [3.0, 4.0]];
         let arr = PyArray2::from_owned_array(py, Array2::from_shape_vec((2, 2), arr.concat()).unwrap());
         let result = wrapped.search_batch(py, arr.readonly(), 1);
         assert!(result.is_err());
         let msg = format!("{:?}", result.unwrap_err());
-        println!("Search returned error: {}", msg);
+        println!("Search returned error: {msg}");
         assert!(msg.to_lowercase().contains("lock error"));
     });
 }

@@ -47,7 +47,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     let input = parse_macro_input!(item as DeriveInput);
     let name = &input.ident;
-    let py_name = Ident::new(&format!("Py{}", name), Span::call_site());
+    let py_name = Ident::new(&format!("Py{name}"), Span::call_site());
 
     let expanded = quote! {
         #input
@@ -76,7 +76,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let shape = data.shape();
                 if shape.len() != 2 || shape[1] != dims {
                     return Err(pyo3::exceptions::PyValueError::new_err(
-                        format!("Input data must be of shape (n, {})", dims),
+                        format!("Input data must be of shape (n, {dims})"),
                     ));
                 }
 

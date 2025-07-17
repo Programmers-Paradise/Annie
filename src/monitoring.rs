@@ -111,27 +111,27 @@ impl MetricsCollector {
         // Basic metrics
         output.push_str("# HELP annie_queries_total Total number of queries processed\n");
         output.push_str("# TYPE annie_queries_total counter\n");
-        output.push_str(&format!("annie_queries_total {}\n", query_count));
+        output.push_str(&format!("annie_queries_total {query_count}\n"));
 
         output.push_str("# HELP annie_query_latency_microseconds_avg Average query latency in microseconds\n");
         output.push_str("# TYPE annie_query_latency_microseconds_avg gauge\n");
-        output.push_str(&format!("annie_query_latency_microseconds_avg {:.2}\n", avg_latency_us));
+        output.push_str(&format!("annie_query_latency_microseconds_avg {avg_latency_us:.2}\n"));
 
         output.push_str("# HELP annie_index_size Number of vectors in the index\n");
         output.push_str("# TYPE annie_index_size gauge\n");
-        output.push_str(&format!("annie_index_size {}\n", index_size));
+        output.push_str(&format!("annie_index_size {index_size}\n"));
 
         output.push_str("# HELP annie_dimensions Number of dimensions per vector\n");
         output.push_str("# TYPE annie_dimensions gauge\n");
-        output.push_str(&format!("annie_dimensions {}\n", dimensions));
+        output.push_str(&format!("annie_dimensions {dimensions}\n"));
 
         output.push_str("# HELP annie_uptime_seconds Uptime in seconds\n");
         output.push_str("# TYPE annie_uptime_seconds gauge\n");
-        output.push_str(&format!("annie_uptime_seconds {}\n", uptime_seconds));
+        output.push_str(&format!("annie_uptime_seconds {uptime_seconds}\n"));
 
         output.push_str("# HELP annie_distance_metric Distance metric used\n");
         output.push_str("# TYPE annie_distance_metric gauge\n");
-        output.push_str(&format!("annie_distance_metric{{metric=\"{}\"}} 1\n", distance_metric));
+        output.push_str(&format!("annie_distance_metric{{metric=\"{distance_metric}\"}} 1\n"));
 
         output
     }
@@ -174,12 +174,12 @@ impl MetricsServer {
                         let metrics_clone = Arc::clone(&metrics);
                         thread::spawn(move || {
                             if let Err(e) = handle_request(stream, metrics_clone) {
-                                eprintln!("Error handling metrics request: {}", e);
+                                eprintln!("Error handling metrics request: {e}");
                             }
                         });
                     }
                     Err(e) => {
-                        eprintln!("Error accepting connection: {}", e);
+                        eprintln!("Error accepting connection: {e}");
                     }
                 }
             }
@@ -191,7 +191,7 @@ impl MetricsServer {
 
 fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
     let mut buffer = [0; 1024];
-    stream.read(&mut buffer)?;
+    let _bytes_read = stream.read(&mut buffer)?;
 
     let request = String::from_utf8_lossy(&buffer[..]);
     
@@ -199,9 +199,8 @@ fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector
     if request.starts_with("GET /metrics") {
         let metrics_output = metrics.to_prometheus_format();
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
-            metrics_output.len(),
-            metrics_output
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\n\r\n{metrics_output}",
+            metrics_output.len()
         );
         stream.write_all(response.as_bytes())?;
     } else if request.starts_with("GET /health") {
@@ -236,7 +235,7 @@ impl PyMetricsCollector {
     fn enable_metrics(&mut self, port: u16) -> PyResult<()> {
         let server = MetricsServer::new(Arc::clone(&self.inner), port);
         server.start().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            format!("Failed to start metrics server: {}", e)
+            format!("Failed to start metrics server: {e}")
         ))?;
         self.server = Some(server);
         Ok(())
