@@ -173,8 +173,8 @@ impl MetricsServer {
                     Ok(stream) => {
                         let metrics_clone = Arc::clone(&metrics);
                         thread::spawn(move || {
-                            if let Err(e) = handle_request(stream, metrics_clone) {
-                                eprintln!("Error handling metrics request: {e}")
+                            if let Err(e) = MetricsServer::handle_request(stream, metrics_clone) {
+                                eprintln!("Error handling metrics request: {e}");
                             }
                         });
                     }
@@ -188,27 +188,28 @@ impl MetricsServer {
         Ok(())
     }
 
-fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
-    let mut buffer = [0; 1024];
-    let _bytes_read = stream.read(&mut buffer)?;
+    fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
+        let mut buffer = [0; 1024];
+        let _bytes_read = stream.read(&mut buffer)?;
 
-    let request = String::from_utf8_lossy(&buffer[..]);
-    
-    // Simple HTTP request parsing
-    if request.starts_with("GET /metrics") {
-        let metrics_output = metrics.to_prometheus_format();
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\n\r\n{metrics_output}",
-            metrics_output.len()
-        );
-        stream.write_all(response.as_bytes())?;
-    } else if request.starts_with("GET /health") {
-        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK";
-        stream.write_all(response.as_bytes())?;
-    } else {
-        let response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\n\r\nNot Found";
-        stream.write_all(response.as_bytes())?;
-    }
+        let request = String::from_utf8_lossy(&buffer[..]);
+        
+        // Simple HTTP request parsing
+        if request.starts_with("GET /metrics") {
+            let metrics_output = metrics.to_prometheus_format();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\n\r\n{metrics_output}",
+                metrics_output.len()
+            );
+            stream.write_all(response.as_bytes())?;
+        } else if request.starts_with("GET /health") {
+            let response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nOK";
+            stream.write_all(response.as_bytes())?;
+        } else {
+            let response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 9\r\n\r\nNot Found";
+            stream.write_all(response.as_bytes())?;
+        }
+
         Ok(())
     }
 }
