@@ -303,7 +303,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Multiple Backends**:
   - **Brute-force** (exact) with SIMD acceleration
   - **HNSW** (approximate) for large-scale datasets
-- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, and Custom
+- **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev, Hamming, Jaccard, Angular, Canberra, and Custom
 - **Batch Queries** for efficient processing
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
@@ -571,7 +571,7 @@ You’ll find:
 
 Create a brute-force k-NN index.
 
-Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, `Distance.custom(name)`
+Enum: `Distance.EUCLIDEAN`, `Distance.COSINE`, `Distance.MANHATTAN`, `Distance.CHEBYSHEV`, `Distance.HAMMING`, `Distance.JACCARD`, `Distance.ANGULAR`, `Distance.CANBERRA`, `Distance.custom(name)`
 
 ### ThreadSafeAnnIndex
 

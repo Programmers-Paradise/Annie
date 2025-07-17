@@ -235,7 +235,6 @@ You’ll find:
 | Index              |Unified wrapper over AnnIndex and PyHnswIndex|
 | PyHnswConfig       |Configurable struct for HNSW                 |
 
-
 ### Utility Module
 
 | Module | Description                                         |
