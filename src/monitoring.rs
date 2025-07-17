@@ -166,6 +166,7 @@ impl MetricsServer {
 
         let listener = TcpListener::bind(format!("127.0.0.1:{}", self.port))?;
         let metrics = Arc::clone(&self.metrics);
+        let handle_request = Self::handle_request;
 
         thread::spawn(move || {
             for stream in listener.incoming() {
@@ -173,7 +174,7 @@ impl MetricsServer {
                     Ok(stream) => {
                         let metrics_clone = Arc::clone(&metrics);
                         thread::spawn(move || {
-                            if let Err(e) = MetricsServer::handle_request(stream, metrics_clone) {
+                            if let Err(e) = handle_request(stream, metrics_clone) {
                                 eprintln!("Error handling metrics request: {e}");
                             }
                         });
