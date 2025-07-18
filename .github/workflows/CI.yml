@@ -210,8 +210,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          pip install --upgrade pip
+          pip install maturin numpy pandas plotly jinja2 scikit-learn faiss-cpu annoy psutil
           pip install .  # install local rust-annie
-          pip install numpy
 
       - name: Run benchmark.py on PR
         run: python scripts/benchmark.py --output pr_benchmark.json
