@@ -58,12 +58,6 @@ def check_regression():
             regressions.append(
                 f"Relative regression: rust_annie/{lib} ratio for {dataset} increased from {base_ratio:.2f} to {curr_ratio:.2f}"
             )
-        
-        if curr_ratio > base_ratio * (1 + THRESHOLD):
-            regressions.append(
-                f"Relative regression against {lib} for {dataset}: "
-                f"{base_ratio:.2f}x → {curr_ratio:.2f}x"
-            )
     
     if regressions:
         print("Performance regressions detected:")
