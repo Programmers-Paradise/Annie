@@ -27,7 +27,6 @@ def load_benchmarks(directory=BENCHMARK_DIR):
     return pd.DataFrame(rows)
 
 def create_scatter_plot(df, metric_name, title, yaxis_title, transform=None):
-    """Helper function to create scatter plots with consistent logic."""
     fig = go.Figure()
     libraries = ["rust_annie", "sklearn", "faiss", "annoy"]
     
@@ -35,13 +34,12 @@ def create_scatter_plot(df, metric_name, title, yaxis_title, transform=None):
         lib_df = df[df[lib].notnull()].copy()
         if lib_df.empty:
             continue
-        lib_df[lib] = lib_df[lib].map(json.loads)
-        
-        # Extract and transform metric value
-        metric_key = "build_memory_mb" if "memory" in metric_name.lower() else "search_avg"
+
+        # Determine metric key
+        key = "build_memory_mb" if "memory" in metric_name.lower() else "search_avg"
+        # Extract values, applying transform if provided
         lib_df["metric_value"] = lib_df[lib].apply(
-            lambda x: transform(x.get(metric_key, 0)) if transform else lib_df[lib].apply(
-            lambda x: x.get(metric_key, 0))
+            lambda x: transform(x.get(key, 0)) if transform else x.get(key, 0)
         )
         
         for dataset, group in lib_df.groupby("dataset"):
@@ -61,7 +59,6 @@ def create_scatter_plot(df, metric_name, title, yaxis_title, transform=None):
     return fig
 
 def create_bar_plot(df, metric_name, title, yaxis_title):
-    """Helper function to create bar charts with consistent logic."""
     fig = go.Figure()
     libraries = ["rust_annie", "sklearn", "faiss", "annoy"]
     
@@ -69,13 +66,13 @@ def create_bar_plot(df, metric_name, title, yaxis_title):
         lib_df = df[df[lib].notnull()].copy()
         if lib_df.empty:
             continue
-        lib_df[lib] = lib_df[lib].map(json.loads)
-        lib_df["build_time"] = lib_df[lib].apply(lambda x: x.get(metric_name, 0))
+        # Compute build_time for each entry
+        lib_df["build_time_val"] = lib_df[lib].apply(lambda x: x.get(metric_name, 0))
         
         for dataset, group in lib_df.groupby("dataset"):
             fig.add_trace(go.Bar(
-                x=[f"{dataset}"],
-                y=[group["build_time"].mean()],
+                x=[dataset],
+                y=[group["build_time_val"].mean()],
                 name=f"{lib} ({dataset})"
             ))
     
@@ -88,27 +85,25 @@ def create_bar_plot(df, metric_name, title, yaxis_title):
     return fig
 
 def create_percentile_plot(df):
-    """Create percentile plot specifically for rust_annie."""
     fig = go.Figure()
     rust_df = df[df["rust_annie"].notnull()].copy()
-    rust_df["rust_annie"] = rust_df["rust_annie"].map(json.loads)
     
     for dataset, group in rust_df.groupby("dataset"):
         fig.add_trace(go.Scatter(
             x=group["date"], 
-            y=group["rust_annie"].apply(lambda x: x.get("search_p50", 0)*1000),
+            y=group["rust_annie"].apply(lambda x: x.get("search_p50", 0) * 1000),
             mode='lines+markers',
             name=f"P50 ({dataset})"
         ))
         fig.add_trace(go.Scatter(
             x=group["date"], 
-            y=group["rust_annie"].apply(lambda x: x.get("search_p95", 0)*1000),
+            y=group["rust_annie"].apply(lambda x: x.get("search_p95", 0) * 1000),
             mode='lines+markers',
             name=f"P95 ({dataset})"
         ))
         fig.add_trace(go.Scatter(
             x=group["date"], 
-            y=group["rust_annie"].apply(lambda x: x.get("search_p99", 0)*1000),
+            y=group["rust_annie"].apply(lambda x: x.get("search_p99", 0) * 1000),
             mode='lines+markers',
             name=f"P99 ({dataset})"
         ))
@@ -122,7 +117,6 @@ def create_percentile_plot(df):
     return fig
 
 def create_dashboard(df):
-    """Create all dashboard plots using helper functions."""
     mem_fig = create_scatter_plot(
         df, 
         "Memory Usage", 
@@ -194,12 +188,10 @@ def write_badge(df, output=BADGE_SVG):
         
     latest = df.iloc[-1]
     try:
-        rust_data = json.loads(latest["rust_annie"])
-        faiss_data = json.loads(latest.get("faiss", "{}"))
-        if not isinstance(rust_data, dict) or not isinstance(faiss_data, dict):
-            return
-        speedup = rust_data.get("search_avg", 0) / faiss_data.get("search_avg", 0.001)
-    except (json.JSONDecodeError, TypeError, KeyError):
+        rust_data = latest["rust_annie"]
+        faiss_data = latest.get("faiss", {}) or {}
+        speedup = rust_data.get("search_avg", 0) / (faiss_data.get("search_avg", 0.001) or 0.001)
+    except (TypeError, KeyError):
         return
     
     badge_template = Template(textwrap.dedent("""
@@ -233,7 +225,8 @@ def write_badge(df, output=BADGE_SVG):
     print(f"Badge saved to {output}")
 
 if __name__ == "__main__":
-    df = pd.DataFrame(load_benchmarks())
+    df = load_benchmarks()
+    df = pd.DataFrame(df)
     if df.empty:
         print("No valid benchmark data found.")
     else:
