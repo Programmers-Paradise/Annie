@@ -118,7 +118,6 @@ def benchmark(dataset="medium", repeats=50):
         mem_before = measure_memory()
         build_start = time.perf_counter()
         t = annoy.AnnoyIndex(D, 'euclidean')
-        # Correctly add items
         for i in range(N):
             t.add_item(i, data[i])
         t.build(10)
@@ -152,6 +151,8 @@ if __name__ == "__main__":
     results = benchmark(args.dataset, args.repeats)
     print(json.dumps(results, indent=2))
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    out_dir = os.path.dirname(args.output)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(results, f)
