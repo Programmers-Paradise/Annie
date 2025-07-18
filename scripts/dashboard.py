@@ -24,7 +24,7 @@ def load_benchmarks(directory=BENCHMARK_DIR):
                 rows.append(data)
             except json.JSONDecodeError:
                 continue
-    return rows
+    return pd.DataFrame(rows)
 
 def create_dashboard(df):
     # Memory Usage Plot
@@ -33,7 +33,7 @@ def create_dashboard(df):
         lib_df = df[df[lib].notnull()].copy()
         if lib_df.empty:
             continue
-        lib_df[lib] = lib_df[lib].apply(json.loads)
+        lib_df[lib] = lib_df[lib].map(json.loads)
         lib_df["build_memory"] = lib_df[lib].apply(lambda x: x.get("build_memory_mb", 0))
         
         for dataset, group in lib_df.groupby("dataset"):
@@ -176,8 +176,14 @@ def write_badge(df, output=BADGE_SVG):
         return
         
     latest = df.iloc[-1]
-    rust_data = json.loads(latest["rust_annie"])
-    speedup = rust_data["search_avg"] / json.loads(latest.get("faiss", "{}")).get("search_avg", 0.001)
+    try:
+        rust_data = json.loads(latest["rust_annie"])
+        faiss_data = json.loads(latest.get("faiss", "{}"))
+        if not isinstance(rust_data, dict) or not isinstance(faiss_data, dict):
+            return
+        speedup = rust_data.get("search_avg", 0) / faiss_data.get("search_avg", 0.001)
+    except (json.JSONDecodeError, TypeError, KeyError):
+        return
     
     badge_template = Template(textwrap.dedent("""
     <svg xmlns="http://www.w3.org/2000/svg" width="180" height="20">

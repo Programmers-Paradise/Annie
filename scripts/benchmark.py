@@ -100,7 +100,7 @@ def benchmark(dataset="medium", repeats=50):
         search_times = []
         for q in queries:
             start = time.perf_counter()
-            faiss.knn_search(index, q.reshape(1, -1), k)
+            _, _ = index.search(q.reshape(1, -1), k)
             search_times.append(time.perf_counter() - start)
         
         results["faiss"] = {
@@ -118,8 +118,7 @@ def benchmark(dataset="medium", repeats=50):
         mem_before = measure_memory()
         build_start = time.perf_counter()
         t = annoy.AnnoyIndex(D, 'euclidean')
-        for i in range(N):
-            t.add_item(i, data[i])
+        t.add_items(np.arange(N), data)
         t.build(10)
         build_time = time.perf_counter() - build_start
         mem_after = measure_memory()

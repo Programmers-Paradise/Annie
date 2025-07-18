@@ -8,7 +8,13 @@ def check_regression():
         return
         
     # Sort by timestamp
-    files.sort(key=lambda f: json.load(open(f)).get("timestamp", 0))
+    file_timestamps = []
+    for f in files:
+        with open(f) as fp:
+            ts = json.load(fp).get("timestamp", 0)
+        file_timestamps.append((ts, f))
+    file_timestamps.sort()
+    files = [f for _, f in file_timestamps]
     current = files[-1]
     baseline = files[-2]
     
