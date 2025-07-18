@@ -10,6 +10,7 @@ The monitoring system provides:
 - **Prometheus metrics endpoint** - Industry-standard metrics format
 - **Low overhead design** - Minimal performance impact on queries
 - **Python integration** - Easy to use in Python server contexts
+- **Regression checks** - Automated performance regression detection
 
 ## Quick Start
 
@@ -245,6 +246,7 @@ scrape_configs:
 2. **Monitor Resource Usage**: Keep an eye on memory usage for long-running applications
 3. **Regular Metrics Review**: Use metrics to optimize query performance and index configuration
 4. **Integration with Alerting**: Set up alerts for high latency or error rates
+5. **Automated Regression Checks**: Regularly run regression checks to ensure performance stability
 
 ## Troubleshooting
 
@@ -287,3 +289,12 @@ The Annie monitoring system provides production-ready metrics for K-NN workloads
 ## CI/CD Logging Updates
 
 Recent updates to the CI workflow have introduced additional logging steps to enhance the release process. These steps include logging the start of the release process, the GitHub reference, and the event name. When a new tag is detected, the version being released is logged. Upon successful publication to PyPI, a confirmation message is logged, along with a link to the package on PyPI. These logs can be useful for monitoring the release process and ensuring that each step is executed correctly.
+
+## Benchmark and Regression Check Updates
+
+Recent updates to the benchmarking process include:
+- **Daily Scheduled Benchmarks**: Benchmarks are now run daily to ensure consistent performance tracking.
+- **Dataset Variability**: Benchmarks are conducted across multiple dataset sizes ("small", "medium", "large") to provide comprehensive performance insights.
+- **Regression Check Script**: A new script (`check_regression.py`) automatically checks for performance regressions by comparing recent benchmark results with previous ones. This helps in maintaining performance stability over time.
+- **Enhanced Benchmark Metrics**: Additional metrics such as memory usage during index build and detailed latency percentiles (P50, P95, P99) are now tracked.
+- **Dashboard and Badge Updates**: The benchmark dashboard and performance badge have been updated to reflect these new metrics and provide a clearer performance overview.

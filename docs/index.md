@@ -322,6 +322,11 @@ jobs:
 
 Benchmarks are tracked over time using:
 
+- **Daily Benchmarking**: Automated daily benchmarks to track performance over time.
+- **Dataset Variability**: Benchmarks now include small, medium, and large datasets.
+- **Memory Usage Tracking**: Memory usage is tracked during index build and search operations.
+- **Additional Libraries**: Benchmarks now compare against scikit-learn, FAISS, and Annoy.
+
 ## GPU Acceleration
 
 ### CUDA Support
