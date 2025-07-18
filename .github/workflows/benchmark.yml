@@ -17,13 +17,23 @@ on:
       - 'src/**'
       - 'Cargo.*'
       - 'pyproject.toml'
+  schedule:
+    - cron: '0 0 * * *'  # Daily benchmark
 
 jobs:
   benchmark:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        dataset: ["small", "medium", "large"]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full history for commit info
+
+    - name: Get commit hash
+      id: commit
+      run: echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -37,8 +47,8 @@ jobs:
 
     - name: Install Python dependencies
       run: |
-       pip install maturin
-       pip install numpy pandas plotly jinja2
+        pip install maturin numpy pandas plotly jinja2 scikit-learn faiss-cpu annoy psutil
+        pip install .
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -46,17 +56,25 @@ jobs:
     - name: Build rust_annie
       run: |
         source .venv/bin/activate
-        maturin develop
+        maturin develop --release
 
     - name: Run benchmark
       run: |
         source .venv/bin/activate
-        python scripts/benchmark.py --output benchmarks/latest.json
+        mkdir -p benchmarks
+        python scripts/benchmark.py \
+          --dataset ${{ matrix.dataset }} \
+          --output "benchmarks/${{ steps.commit.outputs.commit }}-${{ matrix.dataset }}.json"
 
     - name: Generate dashboard + badge
       run: |
         source .venv/bin/activate
-        python dashboard.py
+        python scripts/dashboard.py
+
+    - name: Check for regressions
+      run: |
+        source .venv/bin/activate
+        python scripts/check_regression.py
 
     - name: Commit and push dashboard updates
       run: |
@@ -64,13 +82,4 @@ jobs:
         git config user.email github-actions@github.com
         git add -f benchmarks/*.json docs/index.html docs/dashboard-badge.svg
         git commit -m "chore: update benchmark dashboard [skip ci]" || echo "No changes to commit"
-        
-        # Determine the branch to push to
-        BRANCH="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-        
-        if [ -n "$BRANCH" ]; then
-          git checkout "$BRANCH"
-          git push origin "$BRANCH"
-       else
-          echo "Not on a branch — skipping push."
-       fi
+        git push origin main
