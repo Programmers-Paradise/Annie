@@ -26,108 +26,125 @@ def load_benchmarks(directory=BENCHMARK_DIR):
                 continue
     return pd.DataFrame(rows)
 
-def create_dashboard(df):
-    # Memory Usage Plot
-    mem_fig = go.Figure()
-    for lib in ["rust_annie", "sklearn", "faiss", "annoy"]:
+def create_scatter_plot(df, metric_name, title, yaxis_title, transform=None):
+    """Helper function to create scatter plots with consistent logic."""
+    fig = go.Figure()
+    libraries = ["rust_annie", "sklearn", "faiss", "annoy"]
+    
+    for lib in libraries:
         lib_df = df[df[lib].notnull()].copy()
         if lib_df.empty:
             continue
         lib_df[lib] = lib_df[lib].map(json.loads)
-        lib_df["build_memory"] = lib_df[lib].apply(lambda x: x.get("build_memory_mb", 0))
+        
+        # Extract and transform metric value
+        metric_key = "build_memory_mb" if "memory" in metric_name.lower() else "search_avg"
+        lib_df["metric_value"] = lib_df[lib].apply(
+            lambda x: transform(x.get(metric_key, 0)) if transform else lib_df[lib].apply(
+            lambda x: x.get(metric_key, 0))
+        )
         
         for dataset, group in lib_df.groupby("dataset"):
-            mem_fig.add_trace(go.Scatter(
+            fig.add_trace(go.Scatter(
                 x=group["date"], 
-                y=group["build_memory"],
+                y=group["metric_value"],
                 mode='lines+markers',
                 name=f"{lib} ({dataset})"
             ))
     
-    mem_fig.update_layout(
-        title="Index Build Memory Usage",
+    fig.update_layout(
+        title=title,
         xaxis_title="Date",
-        yaxis_title="Memory (MB)",
+        yaxis_title=yaxis_title,
         legend=dict(orientation="h", y=1.1)
     )
+    return fig
+
+def create_bar_plot(df, metric_name, title, yaxis_title):
+    """Helper function to create bar charts with consistent logic."""
+    fig = go.Figure()
+    libraries = ["rust_annie", "sklearn", "faiss", "annoy"]
     
-    # Latency Comparison Plot
-    latency_fig = go.Figure()
-    for lib in ["rust_annie", "sklearn", "faiss", "annoy"]:
+    for lib in libraries:
         lib_df = df[df[lib].notnull()].copy()
         if lib_df.empty:
             continue
-        lib_df[lib] = lib_df[lib].apply(json.loads)
-        lib_df["search_avg"] = lib_df[lib].apply(lambda x: x.get("search_avg", 0)*1000)
+        lib_df[lib] = lib_df[lib].map(json.loads)
+        lib_df["build_time"] = lib_df[lib].apply(lambda x: x.get(metric_name, 0))
         
         for dataset, group in lib_df.groupby("dataset"):
-            latency_fig.add_trace(go.Scatter(
-                x=group["date"], 
-                y=group["search_avg"],
-                mode='lines+markers',
+            fig.add_trace(go.Bar(
+                x=[f"{dataset}"],
+                y=[group["build_time"].mean()],
                 name=f"{lib} ({dataset})"
             ))
     
-    latency_fig.update_layout(
-        title="Search Latency (Average)",
-        xaxis_title="Date",
-        yaxis_title="Time (ms)",
-        legend=dict(orientation="h", y=1.1)
+    fig.update_layout(
+        title=title,
+        xaxis_title="Dataset",
+        yaxis_title=yaxis_title,
+        barmode="group"
     )
-    
-    # Percentile Plot for Rust-annie
-    pct_fig = go.Figure()
+    return fig
+
+def create_percentile_plot(df):
+    """Create percentile plot specifically for rust_annie."""
+    fig = go.Figure()
     rust_df = df[df["rust_annie"].notnull()].copy()
-    rust_df["rust_annie"] = rust_df["rust_annie"].apply(json.loads)
+    rust_df["rust_annie"] = rust_df["rust_annie"].map(json.loads)
     
     for dataset, group in rust_df.groupby("dataset"):
-        pct_fig.add_trace(go.Scatter(
+        fig.add_trace(go.Scatter(
             x=group["date"], 
             y=group["rust_annie"].apply(lambda x: x.get("search_p50", 0)*1000),
             mode='lines+markers',
             name=f"P50 ({dataset})"
         ))
-        pct_fig.add_trace(go.Scatter(
+        fig.add_trace(go.Scatter(
             x=group["date"], 
             y=group["rust_annie"].apply(lambda x: x.get("search_p95", 0)*1000),
             mode='lines+markers',
             name=f"P95 ({dataset})"
         ))
-        pct_fig.add_trace(go.Scatter(
+        fig.add_trace(go.Scatter(
             x=group["date"], 
             y=group["rust_annie"].apply(lambda x: x.get("search_p99", 0)*1000),
             mode='lines+markers',
             name=f"P99 ({dataset})"
         ))
     
-    pct_fig.update_layout(
+    fig.update_layout(
         title="Rust-annie Search Percentiles",
         xaxis_title="Date",
         yaxis_title="Time (ms)",
         legend=dict(orientation="h", y=1.1)
     )
+    return fig
+
+def create_dashboard(df):
+    """Create all dashboard plots using helper functions."""
+    mem_fig = create_scatter_plot(
+        df, 
+        "Memory Usage", 
+        "Index Build Memory Usage", 
+        "Memory (MB)"
+    )
     
-    # Build Time Comparison
-    build_fig = go.Figure()
-    for lib in ["rust_annie", "sklearn", "faiss", "annoy"]:
-        lib_df = df[df[lib].notnull()].copy()
-        if lib_df.empty:
-            continue
-        lib_df[lib] = lib_df[lib].apply(json.loads)
-        lib_df["build_time"] = lib_df[lib].apply(lambda x: x.get("build_time", 0))
-        
-        for dataset, group in lib_df.groupby("dataset"):
-            build_fig.add_trace(go.Bar(
-                x=[f"{dataset}-{group['date'].iloc[-1].strftime('%Y-%m-%d')}"],
-                y=[group["build_time"].mean()],
-                name=f"{lib} ({dataset})"
-            ))
+    latency_fig = create_scatter_plot(
+        df, 
+        "Search Latency", 
+        "Search Latency (Average)", 
+        "Time (ms)",
+        transform=lambda x: x * 1000  # Convert seconds to milliseconds
+    )
     
-    build_fig.update_layout(
-        title="Index Build Time Comparison",
-        xaxis_title="Dataset",
-        yaxis_title="Time (seconds)",
-        barmode="group"
+    pct_fig = create_percentile_plot(df)
+    
+    build_fig = create_bar_plot(
+        df, 
+        "build_time", 
+        "Index Build Time Comparison", 
+        "Time (seconds)"
     )
     
     return mem_fig, latency_fig, pct_fig, build_fig
