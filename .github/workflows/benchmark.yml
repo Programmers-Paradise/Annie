@@ -81,4 +81,5 @@ jobs:
           git config user.email github-actions@github.com
           git add -f benchmarks/*.json docs/index.html docs/dashboard-badge.svg
           git commit -m "chore: update benchmark dashboard [skip ci]" || echo "No changes to commit"
-          git push origin main
+          # Push to default branch
+          git push origin HEAD:main
