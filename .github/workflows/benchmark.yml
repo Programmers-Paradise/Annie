@@ -27,59 +27,58 @@ jobs:
       matrix:
         dataset: ["small", "medium", "large"]
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  # Get full history for commit info
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full history for commit info
 
-    - name: Get commit hash
-      id: commit
-      run: echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+      - name: Get commit hash
+        id: commit
+        run: echo "commit=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Set up virtual environment
-      run: |
-        python -m venv .venv
-        echo "source .venv/bin/activate" >> $GITHUB_ENV
+      - name: Install dependencies and build
+        shell: bash
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install maturin numpy pandas plotly jinja2 scikit-learn faiss-cpu annoy psutil
+          pip install .
+          # Install Rust toolchain
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          source $HOME/.cargo/env
+          maturin develop --release
 
-    - name: Install Python dependencies
-      run: |
-        pip install maturin numpy pandas plotly jinja2 scikit-learn faiss-cpu annoy psutil
-        pip install .
+      - name: Run benchmark
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          mkdir -p benchmarks
+          python scripts/benchmark.py \
+            --dataset ${{ matrix.dataset }} \
+            --output "benchmarks/${{ steps.commit.outputs.commit }}-${{ matrix.dataset }}.json"
 
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      - name: Generate dashboard + badge
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          python scripts/dashboard.py
 
-    - name: Build rust_annie
-      run: |
-        source .venv/bin/activate
-        maturin develop --release
+      - name: Check for regressions
+        shell: bash
+        run: |
+          source .venv/bin/activate
+          python scripts/check_regression.py
 
-    - name: Run benchmark
-      run: |
-        source .venv/bin/activate
-        mkdir -p benchmarks
-        python scripts/benchmark.py \
-          --dataset ${{ matrix.dataset }} \
-          --output "benchmarks/${{ steps.commit.outputs.commit }}-${{ matrix.dataset }}.json"
-
-    - name: Generate dashboard + badge
-      run: |
-        source .venv/bin/activate
-        python scripts/dashboard.py
-
-    - name: Check for regressions
-      run: |
-        source .venv/bin/activate
-        python scripts/check_regression.py
-
-    - name: Commit and push dashboard updates
-      run: |
-        git config user.name github-actions
-        git config user.email github-actions@github.com
-        git add -f benchmarks/*.json docs/index.html docs/dashboard-badge.svg
-        git commit -m "chore: update benchmark dashboard [skip ci]" || echo "No changes to commit"
-        git push origin main
+      - name: Commit and push dashboard updates
+        shell: bash
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add -f benchmarks/*.json docs/index.html docs/dashboard-badge.svg
+          git commit -m "chore: update benchmark dashboard [skip ci]" || echo "No changes to commit"
+          git push origin main
