@@ -15,7 +15,7 @@ DATASETS = {
 
 def measure_memory():
     process = psutil.Process(os.getpid())
-    return process.memory_info().rss / (1024 ** 2)  # Return in MB
+    return process.memory_info().rss / (1024 ** 2)  # MB
 
 def benchmark(dataset="medium", repeats=50):
     config = DATASETS[dataset]
@@ -118,7 +118,9 @@ def benchmark(dataset="medium", repeats=50):
         mem_before = measure_memory()
         build_start = time.perf_counter()
         t = annoy.AnnoyIndex(D, 'euclidean')
-        t.add_items(np.arange(N), data)
+        # Correctly add items
+        for i in range(N):
+            t.add_item(i, data[i])
         t.build(10)
         build_time = time.perf_counter() - build_start
         mem_after = measure_memory()
