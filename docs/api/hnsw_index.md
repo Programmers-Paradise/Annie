@@ -19,6 +19,13 @@ Add vectors to the index.
 - `data`: N×dims array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
 
+### `add_batch(data: ndarray, ids: ndarray, progress_callback: Optional[Callable[[int, int], None]] = None)`
+Add vectors to the index in batches, with optional progress reporting.
+
+- `data`: N×dims array of float32 vectors
+- `ids`: N-dimensional array of int64 IDs
+- `progress_callback`: Optional callable that takes two integers (current, total) to report progress.
+
 ### `search(vector: ndarray, k: int) -> ndarray`
 Search for k approximate nearest neighbors.
 
@@ -73,6 +80,12 @@ index = PyHnswIndex(dims=128, config=config)
 data = np.random.rand(10000, 128).astype(np.float32)
 ids = np.arange(10000, dtype=np.int64)
 index.add(data, ids)
+
+# Add data in batches with progress reporting
+def progress_callback(current, total):
+    print(f"Progress: {current}/{total}")
+
+index.add_batch(data, ids, progress_callback=progress_callback)
 
 # Search
 query = np.random.rand(128).astype(np.float32)
@@ -193,6 +206,12 @@ index = PyHnswIndex(dims=128, config=config)
 data = np.random.rand(10000, 128).astype(np.float32)
 ids = np.arange(10000, dtype=np.int64)
 index.add(data, ids)
+
+# Add data in batches with progress reporting
+def progress_callback(current, total):
+    print(f"Progress: {current}/{total}")
+
+index.add_batch(data, ids, progress_callback=progress_callback)
 
 # Search
 query = np.random.rand(128).astype(np.float32)
@@ -347,6 +366,7 @@ Same API as `AnnIndex`, safe for concurrent use.
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
 | add(data, ids)	                    | Add vectors to index                       | 
+| add_batch(data, ids, progress_callback) | Add vectors to index in batches with optional progress reporting |
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
