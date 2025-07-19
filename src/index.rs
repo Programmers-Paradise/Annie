@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2, IntoPyArray};
 use ndarray::Array2;
+use ndarray::s;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::sync::Arc;
@@ -63,24 +64,67 @@ impl AnnIndex {
 
     /// Add vectors and IDs in batch.
     pub fn add(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>) -> PyResult<()> {
+        self.add_batch_internal(data, ids, None)
+    }
+
+    /// Add vectors and IDs in batch with progress reporting.
+    /// The callback should be a callable that takes two integers: (current, total)
+    pub fn add_batch_with_progress(
+        &mut self,
+        py: Python,
+        data: PyReadonlyArray2<f32>,
+        ids: PyReadonlyArray1<i64>,
+        progress_callback: PyObject
+    ) -> PyResult<()> {
+        self.add_batch_internal(data, ids, Some(progress_callback))
+    }
+
+    fn add_batch_internal(
+        &mut self,
+        data: PyReadonlyArray2<f32>,
+        ids: PyReadonlyArray1<i64>,
+        progress_callback: Option<PyObject>
+    ) -> PyResult<()> {
         let view = data.as_array();
         let ids = ids.as_slice()?;
-        if view.nrows() != ids.len() {
+        let n = view.nrows();
+        if n != ids.len() {
             return Err(RustAnnError::py_err("Input Mismatch", "`data` and `ids` must have same length"));
         }
-        for (row, &id) in view.outer_iter().zip(ids) {
-            let v = row.to_vec();
-            if v.len() != self.dim {
-                return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, v.len())));
-            }
-            let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
-            self.entries.push((id, v, sq_norm));
+        if view.ncols() != self.dim {
+            return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, view.ncols())));
         }
+        
+        self.entries.reserve(n);
+        let chunk_size = 1000; // vectors per chunk
+        let num_chunks = (n + chunk_size - 1) / chunk_size;
+        
+        for idx in 0..num_chunks {
+            let start = idx * chunk_size;
+            let end = (start + chunk_size).min(n);
+            let chunk_view = view.slice(s![start..end, ..]);
+            let chunk_ids = &ids[start..end];
+            
+            let mut new_entries: Vec<(i64, Vec<f32>, f32)> = Vec::with_capacity(end - start);
+            for (row, &id) in chunk_view.outer_iter().zip(chunk_ids) {
+                let v = row.to_vec();
+                let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
+                new_entries.push((id, v, sq_norm));
+            }
+            self.entries.extend(new_entries);
+            
+            if let Some(cb) = &progress_callback {
+                Python::with_gil(|py| {
+                    cb.call1(py, (end, n)).map_err(|e| {
+                        RustAnnError::py_err("Callback Error", format!("Progress callback failed: {}", e))
+                    })?;
+                    Ok(())
+                })?;
+            }
+        }
+        
         if let Some(metrics) = &self.metrics {
-            let metric_name = if let Some(p) = self.minkowski_p {
-                format!("minkowski_p{}", p)
-            } else {
-                match &self.metric {
+            let metric_name = match &self.metric {
                     Distance::Euclidean() => "euclidean".to_string(),
                     Distance::Cosine()    => "cosine".to_string(),
                     Distance::Manhattan() => "manhattan".to_string(),
@@ -91,7 +135,6 @@ impl AnnIndex {
                     Distance::Angular()   => "angular".to_string(),
                     Distance::Canberra()  => "canberra".to_string(),
                     Distance::Custom(n)   => n.clone(),
-                }
             };
             metrics.set_index_metadata(self.entries.len(), self.dim, &metric_name);
         }
@@ -243,7 +286,11 @@ impl AnnIndex {
 
 impl AnnBackend for AnnIndex {
     fn new(dim: usize, metric: Distance) -> Self { AnnIndex { dim, metric, minkowski_p: None, entries: Vec::new(), metrics: None } }
-    fn add_item(&mut self, item: Vec<f32>) { let id = self.entries.len() as i64; let sq = item.iter().map(|x| x * x).sum::<f32>(); self.entries.push((id, item, sq)); }
+    fn add_item(&mut self, item: Vec<f32>) {
+        let id = self.entries.len() as i64;
+        let sq = item.iter().map(|x| x * x).sum::<f32>();
+        self.entries.push((id, item, sq));
+    }
     fn build(&mut self) {}
     fn search(&self, vector: &[f32], k: usize) -> Vec<usize> { self.inner_search(vector, vector.iter().map(|x| x*x).sum(), k).unwrap().0.into_iter().map(|id| id as usize).collect() }
     fn save(&self, path: &str) { let _ = save_index(self, path); }

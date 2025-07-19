@@ -30,6 +30,12 @@ impl AnnBackend for HnswIndex {
         self.index.insert((&vector, id));
     }
 
+    fn add_batch(&mut self, vectors: Vec<Vec<f32>>) {
+        for v in vectors {
+            self.add(v);
+        }
+    }
+
     fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)> {
         self.index
             .search(query, k, 50)

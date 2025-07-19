@@ -19,6 +19,12 @@ impl AnnBackend for BruteForceIndex {
         self.vectors.push(vector);
     }
 
+    fn add_batch(&mut self, vectors: Vec<Vec<f32>>) {
+        for v in vectors {
+            self.add(v);
+        }
+    }
+
     fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)> {
         let mut scored: Vec<_> = self.vectors.iter().enumerate().map(|(i, v)| {
             let d = match self.distance {
