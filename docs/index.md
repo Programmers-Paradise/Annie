@@ -42,6 +42,7 @@ neighbor_ids, distances = index.search(query, k=5)
   - **GPU** (CUDA) for high-performance computations
 - **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Chebyshev
 - **Batch Queries** for efficient processing
+- **Batch Addition** of vectors for improved performance
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
 - **On-disk Persistence** with serialization
@@ -148,6 +149,26 @@ labels_batch, dists_batch = idx.search_batch(queries, k=10)
 print(labels_batch.shape)  # (32, 10)
 ```
 
+### Batch Addition
+```python
+from rust_annie import AnnIndex, Distance
+import numpy as np
+
+# Create index
+idx = AnnIndex(16, Distance.EUCLIDEAN)
+
+# Add data in batch
+data = np.random.rand(1000, 16).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+idx.add(data, ids)
+
+# Add more data in batch with progress reporting
+def progress_callback(current, total):
+    print(f"Progress: {current}/{total}")
+
+idx.add_batch_with_progress(data, ids, progress_callback)
+```
+
 ### Thread-Safe Index
 ```python
 from rust_annie import ThreadSafeAnnIndex, Distance
@@ -246,6 +267,7 @@ You’ll find:
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
 | add(data, ids)	                      | Add vectors to index                       | 
+| add_batch_with_progress(data, ids, progress_callback) | Add vectors in batch with progress reporting |
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 

@@ -68,6 +68,34 @@ ids = np.arange(100, dtype=np.int64)
 index.add(data, ids)
 ```
 
+### `add_batch_with_progress(data: ndarray, ids: ndarray, progress_callback: Callable[[int, int], None])`
+Add a batch of vectors with their corresponding IDs to the index with progress reporting.
+
+- `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
+- `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
+- `progress_callback` (Callable[[int, int], None]): A callback function that takes two integers: the current number of processed vectors and the total number of vectors.
+- Raises: `RustAnnError`: If data and ids have different lengths, or if any vector has incorrect dimension.
+
+Example:
+```python
+import numpy as np
+
+def progress(current, total):
+    print(f"Progress: {current}/{total}")
+
+data = np.random.rand(100, 128).astype(np.float32)
+ids = np.arange(100, dtype=np.int64)
+index.add_batch_with_progress(data, ids, progress)
+```
+
+### `add_batch_internal(data: ndarray, ids: ndarray, progress_callback: Optional[Callable[[int, int], None]])`
+Internal method to add a batch of vectors with their corresponding IDs to the index, optionally with progress reporting.
+
+- `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
+- `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
+- `progress_callback` (Optional[Callable[[int, int], None]]): A callback function that takes two integers: the current number of processed vectors and the total number of vectors. If None, no progress is reported.
+- Raises: `RustAnnError`: If data and ids have different lengths, or if any vector has incorrect dimension.
+
 ### `remove(ids: List[int])`
 Remove entries from the index by their IDs.
 
@@ -551,6 +579,7 @@ You’ll find:
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
 | add(data, ids)	                      | Add vectors to index                       | 
+| add_batch_with_progress(data, ids, progress_callback) | Add vectors with progress reporting | 
 | remove(ids)                           | Remove vectors from index by IDs           |
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
