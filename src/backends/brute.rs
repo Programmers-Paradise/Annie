@@ -19,10 +19,8 @@ impl AnnBackend for BruteForceIndex {
         self.vectors.push(vector);
     }
 
-    fn add_batch(&mut self, vectors: Vec<Vec<f32>>) {
-        for v in vectors {
-            self.add(v);
-        }
+    fn add_batch(&mut self, mut vectors: Vec<Vec<f32>>) {
+        self.vectors.append(&mut vectors);
     }
 
     fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)> {

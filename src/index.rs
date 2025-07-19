@@ -105,12 +105,16 @@ impl AnnIndex {
             let chunk_view = view.slice(s![start..end, ..]);
             let chunk_ids = &ids[start..end];
             
-            let mut new_entries: Vec<(i64, Vec<f32>, f32)> = Vec::with_capacity(end - start);
-            for (row, &id) in chunk_view.outer_iter().zip(chunk_ids) {
-                let v = row.to_vec();
-                let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
-                new_entries.push((id, v, sq_norm));
-            }
+            let mut seen_ids = std::collections::HashSet::new();
+            new_entries = chunk_view.outer_iter()
+                .zip(chunk_ids)
+                .par_bridge()
+                .map(|(row, &id)| {
+                    let v = row.to_vec();
+                    let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
+                    (id, v, sq_norm)
+                })
+                .collect();
             self.entries.extend(new_entries);
             
             if let Some(cb) = &progress_callback {
