@@ -118,7 +118,7 @@ impl AnnIndex {
             self.entries.extend(new_entries);
             
             if let Some(cb) = &progress_callback {
-                Python::with_gil(|py| {
+                Python::with_gil(|py| -> PyResult<()> {
                     cb.call1(py, (end, n)).map_err(|e| {
                         RustAnnError::py_err("Callback Error", format!("Progress callback failed: {}", e))
                     })?;
