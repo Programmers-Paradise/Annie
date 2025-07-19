@@ -105,8 +105,7 @@ impl AnnIndex {
             let chunk_view = view.slice(s![start..end, ..]);
             let chunk_ids = &ids[start..end];
             
-            let mut seen_ids = std::collections::HashSet::new();
-            new_entries = chunk_view.outer_iter()
+            let new_entries: Vec<(i64, Vec<f32>, f32)> = chunk_view.outer_iter()
                 .zip(chunk_ids)
                 .par_bridge()
                 .map(|(row, &id)| {
