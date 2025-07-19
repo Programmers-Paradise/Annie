@@ -1,39 +1,67 @@
-# compare_results.py
-import json, sys
+#!/usr/bin/env python3
+import json
+import sys
+from numbers import Number
 
 baseline = json.load(open(sys.argv[1]))
 current  = json.load(open(sys.argv[2]))
 
-threshold = 0.2  # Allow 10% regression
+# relative-change threshold (20% by default)
+THRESHOLD = 0.2
 
-def check(key):
-    b, c = baseline[key], current[key]
-
-    if key == "python_search_ms":
-        print(f"ℹ️ {key} ignored: {b:.3f} → {c:.3f} ms")
-        return True
-    
-    if key == "per_query_time_ms":
-        print(f"ℹ️ {key} ignored: {b:.3f} → {c:.3f} ms")
+def compare_value(key_path, b, c):
+    """Compare two numeric values and return True if within threshold."""
+    # Special-case keys to ignore entirely
+    if any(ign in key_path for ign in ("python_search_ms", "per_query_time_ms")):
+        print(f"ℹ️  {key_path} ignored: {b:.3f} → {c:.3f}")
         return True
 
-    if key == "speedup":
-        # For speedup, regression means "current < baseline"
-        if (b - c) / b > threshold:
-            print(f"❌ {key} regressed: {b:.3f} → {c:.3f}")
+    # For a “speedup” metric, regression is when current < baseline
+    if key_path.endswith("speedup"):
+        rel = (b - c) / b if b else 0
+        if rel > THRESHOLD:
+            print(f"❌ {key_path} regressed: {b:.3f} → {c:.3f}")
             return False
+        else:
+            print(f"✅ {key_path} OK: {b:.3f} → {c:.3f}")
+            return True
+
+    # For all other numeric metrics, regression is when current > baseline
+    rel = (c - b) / b if b else 0
+    if rel > THRESHOLD:
+        print(f"❌ {key_path} regressed: {b:.3f} → {c:.3f}")
+        return False
     else:
-        # For latency/timing metrics, regression means "current > baseline"
-        if (c - b) / b > threshold:
-            print(f"❌ {key} regressed: {b:.3f} → {c:.3f} ms")
-            return False
-    print(f"✅ {key} OK: {b:.3f} → {c:.3f}" + (" ms" if key != "speedup" else ""))
-    return True
+        print(f"✅ {key_path} OK: {b:.3f} → {c:.3f}")
+        return True
 
-all_keys = set(baseline.keys()) & set(current.keys())
-if all(check(k) for k in all_keys):
-    print("Benchmark passed.")
-    sys.exit(0)
-else:
-    print("Benchmark failed.")
-    sys.exit(1)
+def recurse_compare(prefix, b_obj, c_obj):
+    """Walk two parallel structures and compare leaf numbers."""
+    ok = True
+
+    # Only keys common to both
+    for key in b_obj:
+        if key not in c_obj:
+            continue
+        b_val = b_obj[key]
+        c_val = c_obj[key]
+        full_key = f"{prefix}.{key}" if prefix else key
+
+        if isinstance(b_val, dict) and isinstance(c_val, dict):
+            # Recurse into nested dict
+            ok &= recurse_compare(full_key, b_val, c_val)
+        elif isinstance(b_val, Number) and isinstance(c_val, Number):
+            ok &= compare_value(full_key, b_val, c_val)
+        else:
+            # Non-numeric leaf—skip
+            print(f"⚠️  Skipping non-numeric key {full_key}")
+    return ok
+
+if __name__ == "__main__":
+    all_ok = recurse_compare("", baseline, current)
+    if all_ok:
+        print("\n🎉 All benchmarks within threshold.")
+        sys.exit(0)
+    else:
+        print("\n🚨 One or more benchmarks regressed beyond {0:.0%}.".format(THRESHOLD))
+        sys.exit(1)
