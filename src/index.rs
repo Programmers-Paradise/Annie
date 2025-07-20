@@ -394,15 +394,37 @@ impl AnnIndex {
             })
             .collect::<Result<Vec<_>, RustAnnError>>()?;
 
-        // Sort by distance (ascending)
-        candidates.par_sort_unstable_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
-
-        // Extract top k results
-        let k = k.min(candidates.len());
-        let (ids, dists): (Vec<i64>, Vec<f32>) = candidates
-            .into_iter()
-            .take(k)
-            .unzip();
+        // Use a min-heap to select top k efficiently
+        use std::collections::BinaryHeap;
+        use std::cmp::Ordering;
+        
+        // Reverse ordering for min-heap
+        #[derive(Eq, PartialEq)]
+        struct HeapItem(i64, f32);
+        impl Ord for HeapItem {
+            fn cmp(&self, other: &Self) -> Ordering {
+                // Compare by distance, reversed for min-heap
+                other.1.partial_cmp(&self.1).unwrap_or(Ordering::Equal)
+            }
+        }
+        impl PartialOrd for HeapItem {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+        let mut heap = BinaryHeap::with_capacity(k);
+        for (id, dist) in candidates.into_iter() {
+            if heap.len() < k {
+                heap.push(HeapItem(id, dist));
+            } else if let Some(top) = heap.peek() {
+                if dist < top.1 {
+                    heap.pop();
+                    heap.push(HeapItem(id, dist));
+                }
+            }
+        }
+        let mut results: Vec<_> = heap.into_sorted_vec();
+        let (ids, dists): (Vec<i64>, Vec<f32>) = results.into_iter().map(|HeapItem(id, dist)| (id, dist)).unzip();
 
         Ok((ids, dists))
     }

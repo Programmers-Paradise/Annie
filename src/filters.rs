@@ -13,7 +13,7 @@ pub enum FilterType {
     And(Vec<Filter>),
     Or(Vec<Filter>),
     Not(Box<Filter>),
-    PythonCallback, // Placeholder for non-serializable filters
+    // PythonCallback variant must never be invoked directly; if implemented, ensure strict sandboxing and input validation to prevent arbitrary code execution.
 }
 
 #[pyclass]
@@ -67,7 +67,13 @@ impl Filter {
         match &*self.inner {
             FilterType::IdRange(min, max) => id >= *min && id <= *max,
             FilterType::IdSet(ids) => ids.contains(&id),
-            FilterType::Boolean(bits) => bits.get(index).unwrap_or(false),
+            FilterType::Boolean(bits) => unsafe {
+                // SAFETY: Caller must ensure index < bits.len()
+                bits.get_unchecked(index)
+            },
+            FilterType::And(filters) => filters.iter().all(|f| f.accepts(id, index)),
+            FilterType::Or(filters) => filters.iter().any(|f| f.accepts(id, index)),
+            FilterType::Not(filter) => !filter.accepts(id, index),
             _ => false, // Callbacks handled separately
         }
     }
