@@ -430,28 +430,45 @@ impl AnnIndex {
         use std::collections::BinaryHeap;
         
         let k = k.min(candidates.len());
-        let mut heap = BinaryHeap::with_capacity(k);
-
-        for (id, dist) in candidates {
-            let candidate = (FloatOrd(dist), id);
-            if heap.len() < k {
-                heap.push(candidate);
-            } else {
-                // Compare candidate with the top of the heap
-                if candidate < *heap.peek().unwrap() {
-                    heap.pop();
-                    heap.push(candidate);
-                }
-            }
+        if k == 0 {
+            return Ok((vec![], vec![]));
         }
+        
+        let mut candidates = candidates;
+        let (left, mid, _) = candidates.select_nth_unstable_by(k - 1, |a, b| {
+            a.1.partial_cmp(&b.1).unwrap_or_else(|| {
+                // Handle NaN values consistently
+                if a.1.is_nan() && b.1.is_nan() {
+                    Ordering::Equal
+                } else if a.1.is_nan() {
+                    Ordering::Greater
+                } else if b.1.is_nan() {
+                    Ordering::Less
+                } else {
+                    Ordering::Equal
+                }
+            })
+        });
 
-        // Convert back to ascending order
-        let sorted = heap.into_sorted_vec();
-        let (ids, dists): (Vec<i64>, Vec<f32>) = sorted
-            .into_iter()
-            .map(|(FloatOrd(dist), id)| (id, dist))
-            .unzip();
+        // Collect and sort only the top-k candidates
+        let mut top_k = left.to_vec();
+        top_k.push(*mid);
+        top_k.sort_unstable_by(|a, b| {
+            a.1.partial_cmp(&b.1).unwrap_or_else(|| {
+                if a.1.is_nan() && b.1.is_nan() {
+                    Ordering::Equal
+                } else if a.1.is_nan() {
+                    Ordering::Greater
+                } else if b.1.is_nan() {
+                    Ordering::Less
+                } else {
+                    Ordering::Equal
+                }
+            })
+        });
 
+        // Extract results
+        let (ids, dists): (Vec<_>, Vec<_>) = top_k.into_iter().unzip();
         Ok((ids, dists))
     }
 
