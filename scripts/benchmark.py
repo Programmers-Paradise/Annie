@@ -49,7 +49,7 @@ def benchmark(dataset="medium", repeats=50):
     search_times = []
     for q in queries:
         start = time.perf_counter()
-        idx.search(q, k)
+        idx.search(q, k, None)
         search_times.append(time.perf_counter() - start)
     
     results["rust_annie"] = {
