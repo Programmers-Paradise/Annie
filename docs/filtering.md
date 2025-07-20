@@ -15,7 +15,7 @@ This improves both precision and flexibility of search.
 #### Example: Python API
 
 ```python
-from rust_annie import AnnIndex
+from rust_annie import AnnIndex, Filter
 import numpy as np
 
 # 1. Create an index with vector dimension 128
@@ -49,6 +49,10 @@ This library supports applying filters to narrow down ANN search results dynamic
 | **Greater than**   | `Filter.gt("score", 0.8)`                     |
 | **Less than**      | `Filter.lt("price", 100)`                     |
 | **Custom predicate** | `Filter.custom(lambda metadata: ...)`       |
+| **ID Range**       | `Filter.id_range(10, 20)`                     |
+| **ID Set**         | `Filter.id_set([10, 15, 20])`                 |
+| **Boolean**        | `Filter.boolean([True, False, True])`         |
+| **Compound**       | `Filter.and([filter1, filter2])`              |
 
 Filters work on the metadata you provide when adding items to the index.
 
@@ -59,7 +63,7 @@ The library now supports filtered search using custom Python callbacks, allowing
 #### Example: Filtered Search with Python Callback
 
 ```python
-from rust_annie import AnnIndex, Distance
+from rust_annie import AnnIndex, Distance, Filter
 import numpy as np
 
 # Create index

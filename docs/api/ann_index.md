@@ -107,11 +107,12 @@ index.remove([1, 5, 10])  # Remove vectors with IDs 1, 5, and 10
 index.remove([])  # No-op for empty list
 ```
 
-### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Search for the k nearest neighbors of a query vector.
+### `search(query: ndarray, k: int, filter: Optional[Filter] = None) -> Tuple[ndarray, ndarray]`
+Search for the k nearest neighbors of a query vector with an optional filter.
 
 - `query` (numpy.ndarray): Query vector with dimension matching the index. Should be a 1D array of float32 values.
 - `k` (int): Number of nearest neighbors to return. Must be positive.
+- `filter` (Optional[Filter]): An optional filter to apply during the search.
 - Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
   - neighbor_ids: Array of k nearest neighbor IDs (int64)
   - distances: Array of k corresponding distances (float32)
@@ -125,11 +126,12 @@ neighbor_ids, distances = index.search(query, 10)
 print(f"Found {len(neighbor_ids)} neighbors")
 ```
 
-### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Batch search for k nearest neighbors for multiple query vectors.
+### `search_batch(queries: ndarray, k: int, filter: Optional[Filter] = None) -> Tuple[ndarray, ndarray]`
+Batch search for k nearest neighbors for multiple query vectors with an optional filter.
 
 - `queries` (numpy.ndarray): N x dim array of query vectors. Each row is a query.
 - `k` (int): Number of nearest neighbors to return for each query.
+- `filter` (Optional[Filter]): An optional filter to apply during the search.
 - Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
   - neighbor_ids: N x k array of neighbor IDs for each query (int64)
   - distances: N x k array of distances for each query (float32)
@@ -150,6 +152,28 @@ Search with ID filtering.
 - `k` (Maximum neighbors to return)
 - `filter_fn` (Function that returns True for allowed IDs)
 - Returns: (filtered IDs, filtered distances)
+
+### `update_boolean_filter(name: str, bits: List[bool])`
+Update a boolean filter by name.
+
+- `name` (str): The name of the filter.
+- `bits` (List[bool]): A list of boolean values representing the filter.
+
+Example:
+```python
+index.update_boolean_filter("even_indices", [True, False, True, False])
+```
+
+### `get_boolean_filter(name: str) -> Optional[List[bool]]`
+Get a boolean filter by name.
+
+- `name` (str): The name of the filter.
+- Returns: Optional[List[bool]]: The boolean filter if it exists, otherwise None.
+
+Example:
+```python
+filter_bits = index.get_boolean_filter("even_indices")
+```
 
 ### `len() -> int`
 Get the number of vectors currently stored in the index.
@@ -453,7 +477,7 @@ with ThreadPoolExecutor(max_workers=8) as executor:
 
 ### Filtered Search
 ```python
-from rust_annie import AnnIndex, Distance
+from rust_annie import AnnIndex, Distance, Filter
 import numpy as np
 
 # Create index
@@ -482,6 +506,12 @@ filtered_ids, filtered_dists = index.search_filter_py(
     filter_fn=even_ids
 )
 print(filtered_ids)  # [10, 30] (20 is filtered out)
+
+# Boolean filter
+index.update_boolean_filter("even_indices", [True, False, True])
+bool_filter = Filter.boolean("even_indices")
+filtered_ids, filtered_dists = index.search(query, k=3, filter=bool_filter)
+print(filtered_ids)  # [10, 30]
 ```
 
 ### Custom Distance Metrics
@@ -581,9 +611,11 @@ You’ll find:
 | add(data, ids)	                      | Add vectors to index                       | 
 | add_batch_with_progress(data, ids, progress_callback) | Add vectors with progress reporting | 
 | remove(ids)                           | Remove vectors from index by IDs           |
-| search(query, k)	                    | Single query search                        | 
-| search_batch(queries, k)              | Batch query search                         | 
+| search(query, k, filter)	            | Single query search with optional filter   | 
+| search_batch(queries, k, filter)      | Batch query search with optional filter    | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
+| update_boolean_filter(name, bits)     | Update a boolean filter by name            |
+| get_boolean_filter(name)              | Get a boolean filter by name               |
 | len()                                 | Get the number of entries in the index     |
 | dim()                                 | Get the dimension of vectors in the index  |
 | save(path)                            | Save index to disk                         | 

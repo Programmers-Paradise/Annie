@@ -19,7 +19,7 @@ maturin develop --release
 ## Basic Usage
 ```python
 import numpy as np
-from rust_annie import AnnIndex, Distance
+from rust_annie import AnnIndex, Distance, Filter
 
 # Create index
 index = AnnIndex(128, Distance.EUCLIDEAN)
@@ -29,7 +29,7 @@ data = np.random.rand(1000, 128).astype(np.float32)
 ids = np.arange(1000, dtype=np.int64)
 index.add(data, ids)
 
-# Search
+# Search with optional filter
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids, distances = index.search(query, k=5)
 ```
@@ -46,7 +46,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Thread-safe** indexes with concurrent access
 - **Zero-copy** NumPy integration
 - **On-disk Persistence** with serialization
-- **Filtered Search** with custom Python callbacks
+- **Filtered Search** with custom Python callbacks and built-in filters
 - **GPU Acceleration** for brute-force calculations
 - **Multi-platform** support (Linux, Windows, macOS)
 - **Automated CI** with performance tracking
@@ -57,7 +57,7 @@ neighbor_ids, distances = index.search(query, k=5)
 ### Brute-Force Index
 ```python
 import numpy as np
-from rust_annie import AnnIndex, Distance
+from rust_annie import AnnIndex, Distance, Filter
 
 # Create index
 index = AnnIndex(128, Distance.EUCLIDEAN)
@@ -67,7 +67,7 @@ data = np.random.rand(1000, 128).astype(np.float32)
 ids = np.arange(1000, dtype=np.int64)
 index.add(data, ids)
 
-# Search
+# Search with optional filter
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids, distances = index.search(query, k=5)
 ```
@@ -196,7 +196,7 @@ with ThreadPoolExecutor(max_workers=8) as executor:
 
 ### Filtered Search
 ```python
-from rust_annie import AnnIndex, Distance
+from rust_annie import AnnIndex, Distance, Filter
 import numpy as np
 
 # Create index
@@ -221,6 +221,11 @@ filtered_ids, filtered_dists = index.search_filter_py(
     filter_fn=even_ids
 )
 print(filtered_ids)  # [10, 30] (20 is filtered out)
+
+# Using built-in filters
+id_range_filter = Filter.id_range(10, 20)
+filtered_ids, filtered_dists = index.search(query, k=3, filter=id_range_filter)
+print(filtered_ids)  # [10, 20]
 ```
 
 ## Build and Query a Brute-Force AnnIndex in Python (Complete Example)
@@ -255,6 +260,7 @@ You’ll find:
 | Distance           | 	Distance metrics (Euclidean, Cosine, etc)  |
 | Index              |Unified wrapper over AnnIndex and PyHnswIndex|
 | PyHnswConfig       |Configurable struct for HNSW                 |
+| Filter             |  Built-in filtering capabilities            |
 
 ### Utility Module
 
@@ -268,11 +274,13 @@ You’ll find:
 | ------------------------------------- | ------------------------------------------ |
 | add(data, ids)	                      | Add vectors to index                       | 
 | add_batch_with_progress(data, ids, progress_callback) | Add vectors in batch with progress reporting |
-| search(query, k)	                    | Single query search                        | 
-| search_batch(queries, k)              | Batch query search                         | 
-| search_filter_py(query, k, filter_fn) | Filtered search                            | 
+| search(query, k, filter=None)         | Single query search with optional filter   | 
+| search_batch(queries, k, filter=None) | Batch query search with optional filter    | 
+| search_filter_py(query, k, filter_fn) | Filtered search with Python callback       | 
 | save(path)                            | Save index to disk                         | 
 | load(path)                            | Load index from disk                       | 
+| update_boolean_filter(name, bits)     | Update a boolean filter by name            | 
+| get_boolean_filter(name)              | Retrieve a boolean filter by name          | 
 
 ### Utility Functions
 
