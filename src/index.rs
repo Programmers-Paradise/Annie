@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2, IntoPyArray};
-use ndarray::{Array2, ArrayView1, ArrayView2};
+use ndarray::Array2;
 use ndarray::s;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
@@ -14,7 +14,7 @@ use crate::storage::{save_index, load_index};
 use crate::metrics::Distance;
 use crate::errors::RustAnnError;
 use crate::monitoring::MetricsCollector;
-use crate::filters::{Filter, PythonFilter};
+use crate::filters::Filter;
 
 #[pyclass]
 #[derive(Serialize, Deserialize)]
@@ -158,15 +158,15 @@ impl AnnIndex {
         
         if let Some(metrics) = &self.metrics {
             let metric_name = match &self.metric {
-                Distance::Euclidean => "euclidean".to_string(),
-                Distance::Cosine => "cosine".to_string(),
-                Distance::Manhattan => "manhattan".to_string(),
-                Distance::Chebyshev => "chebyshev".to_string(),
+                Distance::Euclidean() => "euclidean".to_string(),
+                Distance::Cosine() => "cosine".to_string(),
+                Distance::Manhattan() => "manhattan".to_string(),
+                Distance::Chebyshev() => "chebyshev".to_string(),
                 Distance::Minkowski(p) => format!("minkowski_p{}", p),
-                Distance::Hamming => "hamming".to_string(),
-                Distance::Jaccard => "jaccard".to_string(),
-                Distance::Angular => "angular".to_string(),
-                Distance::Canberra => "canberra".to_string(),
+                Distance::Hamming() => "hamming".to_string(),
+                Distance::Jaccard() => "jaccard".to_string(),
+                Distance::Angular() => "angular".to_string(),
+                Distance::Canberra() => "canberra".to_string(),
                 Distance::Custom(n) => n.clone(),
             };
             metrics.set_index_metadata(self.entries.len(), self.dim, &metric_name);
@@ -280,15 +280,15 @@ impl AnnIndex {
             format!("minkowski_p{}", p) 
         } else {
             match &self.metric {
-                Distance::Euclidean => "euclidean".to_string(),
-                Distance::Cosine => "cosine".to_string(),
-                Distance::Manhattan => "manhattan".to_string(),
-                Distance::Chebyshev => "chebyshev".to_string(),
+                Distance::Euclidean() => "euclidean".to_string(),
+                Distance::Cosine() => "cosine".to_string(),
+                Distance::Manhattan() => "manhattan".to_string(),
+                Distance::Chebyshev() => "chebyshev".to_string(),
                 Distance::Minkowski(p) => format!("minkowski_p{}", p),
-                Distance::Hamming => "hamming".to_string(),
-                Distance::Jaccard => "jaccard".to_string(),
-                Distance::Angular => "angular".to_string(),
-                Distance::Canberra => "canberra".to_string(),
+                Distance::Hamming() => "hamming".to_string(),
+                Distance::Jaccard() => "jaccard".to_string(),
+                Distance::Angular() => "angular".to_string(),
+                Distance::Canberra() => "canberra".to_string(),
                 Distance::Custom(n) => n.clone(),
             }
         };
@@ -376,15 +376,15 @@ impl AnnIndex {
             })
             .map(|(_, (id, vec, sq_norm))| {
                 let dist = match self.metric {
-                    Distance::Euclidean => crate::metrics::euclidean_sq(q, vec, q_sq, *sq_norm),
-                    Distance::Cosine => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
-                    Distance::Manhattan => crate::metrics::manhattan(q, vec),
-                    Distance::Chebyshev => crate::metrics::chebyshev(q, vec),
+                    Distance::Euclidean() => crate::metrics::euclidean_sq(q, vec, q_sq, *sq_norm),
+                    Distance::Cosine() => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
+                    Distance::Manhattan() => crate::metrics::manhattan(q, vec),
+                    Distance::Chebyshev() => crate::metrics::chebyshev(q, vec),
                     Distance::Minkowski(p) => crate::metrics::minkowski(q, vec, p),
-                    Distance::Hamming => crate::metrics::hamming(q, vec),
-                    Distance::Jaccard => crate::metrics::jaccard(q, vec),
-                    Distance::Angular => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
-                    Distance::Canberra => crate::metrics::canberra(q, vec),
+                    Distance::Hamming() => crate::metrics::hamming(q, vec),
+                    Distance::Jaccard() => crate::metrics::jaccard(q, vec),
+                    Distance::Angular() => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
+                    Distance::Canberra() => crate::metrics::canberra(q, vec),
                     Distance::Custom(ref name) => {
                         return Err(RustAnnError::py_err("UnsupportedMetric", 
                             format!("Custom metric '{}' not implemented", name)));
@@ -392,8 +392,8 @@ impl AnnIndex {
                 };
                 Ok((*id, dist))
             })
-            .collect::<Result<Vec<_>, RustAnnError>>()?;
-
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e: PyErr| RustAnnError::new(e.to_string()))?;
         // Use a min-heap to select top k efficiently
         use std::collections::BinaryHeap;
         use std::cmp::Ordering;

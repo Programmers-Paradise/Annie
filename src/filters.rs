@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 use pyo3::PyObject;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use bit_vec::BitVec;
 
@@ -19,19 +19,19 @@ pub enum FilterType {
 #[pyclass]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Filter {
-    inner: Arc<FilterType>,
+    inner: FilterType,
 }
 
 #[pymethods]
 impl Filter {
     #[staticmethod]
     pub fn id_range(min: i64, max: i64) -> Self {
-        Filter { inner: Arc::new(FilterType::IdRange(min, max)) }
+        Filter { inner: FilterType::IdRange(min, max) }
     }
 
     #[staticmethod]
     pub fn id_set(ids: Vec<i64>) -> Self {
-        Filter { inner: Arc::new(FilterType::IdSet(ids.into_iter().collect())) }
+        Filter { inner: FilterType::IdSet(ids.into_iter().collect()) }
     }
 
     #[staticmethod]
@@ -40,27 +40,27 @@ impl Filter {
         for (i, &bit) in bits.iter().enumerate() {
             bv.set(i, bit);
         }
-        Filter { inner: Arc::new(FilterType::Boolean(bv)) }
+        Filter { FilterType::Boolean(bv) }
     }
 
     #[staticmethod]
     pub fn and(filters: Vec<Filter>) -> Self {
-        Filter { inner: Arc::new(FilterType::And(filters)) }
+        Filter { FilterType::And(filters) }
     }
 
     #[staticmethod]
     pub fn or(filters: Vec<Filter>) -> Self {
-        Filter { inner: Arc::new(FilterType::Or(filters)) }
+        Filter { FilterType::Or(filters) }
     }
 
     #[staticmethod]
     pub fn not(filter: Filter) -> Self {
-        Filter { inner: Arc::new(FilterType::Not(Box::new(filter))) }
+        Filter { FilterType::Not(Box::new(filter)) }
     }
 
     #[staticmethod]
-    pub fn from_py_callable(callback: PyObject) -> Self {
-        Filter { inner: Arc::new(FilterType::PythonCallback) }
+    pub fn from_py_callable(_callback: PyObject) -> Self {
+        Filter { FilterType::PythonCallback }
     }
 
     pub fn accepts(&self, id: i64, index: usize) -> bool {

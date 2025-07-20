@@ -61,6 +61,12 @@ impl From<DistanceRegistryError> for PyErr {
     }
 }
 
+impl From<RustAnnError> for PyErr {
+    fn from(err: RustAnnError) -> Self {
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(err.0)
+    }
+}
+
 impl<T> From<PoisonError<T>> for DistanceRegistryError {
     fn from(_: PoisonError<T>) -> Self {
         Self::LockPoisoned
