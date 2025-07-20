@@ -428,6 +428,7 @@ impl AnnIndex {
 
         // Use a min-heap to select top k efficiently
         use std::collections::BinaryHeap;
+        use std::cmp::Ordering;
         
         let k = k.min(candidates.len());
         if k == 0 {
