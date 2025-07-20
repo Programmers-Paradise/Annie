@@ -1,5 +1,3 @@
-# batch_benchmark.py
-
 import time,json,argparse
 import numpy as np
 from rust_annie import AnnIndex, Distance
@@ -15,12 +13,12 @@ def benchmark_batch(N=10000, D=64, k=10, batch_size=64, repeats=20):
     queries = data[:batch_size]
 
     # Warm-up
-    idx.search_batch(queries, k)
+    idx.search_batch(queries, k, None)  # Added None for filter
 
     # 3. Benchmark Rust batch search
     t0 = time.perf_counter()
     for _ in range(repeats):
-        idx.search_batch(queries, k)
+        idx.search_batch(queries, k, None)  # Added None for filter
     t_batch = (time.perf_counter() - t0) / repeats
 
     results = {
@@ -41,4 +39,3 @@ if __name__ == "__main__":
     if args.output:
         with open(args.output, "w") as f:
             json.dump(results, f)
-

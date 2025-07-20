@@ -218,3 +218,19 @@ pub fn canberra(a: &[f32], b: &[f32]) -> f32 {
         })
         .sum()
 }
+
+pub fn euclidean_sq(a: &[f32], b: &[f32], a_sq: f32, b_sq: f32) -> f32 {
+    let dot = dot_product(a, b);
+    a_sq + b_sq - 2.0 * dot
+}
+
+pub fn angular_distance(a: &[f32], b: &[f32], a_sq: f32, b_sq: f32) -> f32 {
+    let dot = dot_product(a, b);
+    let a_norm = a_sq.sqrt();
+    let b_norm = b_sq.sqrt();
+    1.0 - (dot / (a_norm * b_norm))
+}
+
+pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
+}

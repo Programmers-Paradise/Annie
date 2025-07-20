@@ -56,7 +56,7 @@ impl ThreadSafeAnnIndex {
         let guard = self.inner.read().map_err(|e| {
             RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
         })?;
-        guard.search(py, query, k)
+        guard.search(py, query, k, None)
     }
 
     /// Batch k-NN search.
@@ -69,7 +69,7 @@ impl ThreadSafeAnnIndex {
         let guard = self.inner.read().map_err(|e| {
             RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
         })?;
-        guard.search_batch(py, data, k)
+        guard.search_batch(py, data, k, None)
     }
 
     /// Save to disk.

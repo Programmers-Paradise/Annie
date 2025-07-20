@@ -29,7 +29,7 @@ impl Index {
         k: usize,
     ) -> PyResult<(Py<PyAny>, Py<PyAny>)> {
         match self {
-            Index::BruteForce(bf) => bf.search(py, vector, k),
+            Index::BruteForce(bf) => bf.search(py, vector, k, None),
             Index::Hnsw(hnsw) => {
                 let vec_slice = vector.as_slice()?;
                 let results = hnsw.search(vec_slice, k);
