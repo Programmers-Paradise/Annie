@@ -1,11 +1,10 @@
 use pyo3::prelude::*;
 use pyo3::PyObject;
 use std::collections::HashSet;
-use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 use bit_vec::BitVec;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub enum FilterType {
     IdRange(i64, i64),
     IdSet(HashSet<i64>),
@@ -13,7 +12,7 @@ pub enum FilterType {
     And(Vec<Filter>),
     Or(Vec<Filter>),
     Not(Box<Filter>),
-    // PythonCallback variant must never be invoked directly; if implemented, ensure strict sandboxing and input validation to prevent arbitrary code execution.
+    PythonCallback,
 }
 
 #[pyclass]
@@ -40,37 +39,40 @@ impl Filter {
         for (i, &bit) in bits.iter().enumerate() {
             bv.set(i, bit);
         }
-        Filter { FilterType::Boolean(bv) }
+        Filter { inner: FilterType::Boolean(bv) }
     }
 
     #[staticmethod]
     pub fn and(filters: Vec<Filter>) -> Self {
-        Filter { FilterType::And(filters) }
+        Filter { inner: FilterType::And(filters) }
     }
 
     #[staticmethod]
     pub fn or(filters: Vec<Filter>) -> Self {
-        Filter { FilterType::Or(filters) }
+        Filter { inner: FilterType::Or(filters) }
     }
 
     #[staticmethod]
     pub fn not(filter: Filter) -> Self {
-        Filter { FilterType::Not(Box::new(filter)) }
+        Filter { inner: FilterType::Not(Box::new(filter)) }
     }
 
     #[staticmethod]
     pub fn from_py_callable(_callback: PyObject) -> Self {
-        Filter { FilterType::PythonCallback }
+        Filter { inner: FilterType::PythonCallback }
     }
 
     pub fn accepts(&self, id: i64, index: usize) -> bool {
-        match &*self.inner {
+        match &self.inner {
             FilterType::IdRange(min, max) => id >= *min && id <= *max,
             FilterType::IdSet(ids) => ids.contains(&id),
-            FilterType::Boolean(bits) => unsafe {
-                // SAFETY: Caller must ensure index < bits.len()
-                bits.get_unchecked(index)
-            },
+            FilterType::Boolean(bits) => {
+                if index < bits.len() {
+                    bits.get(index).unwrap_or(false)
+                } else {
+                    false
+                }
+            }
             FilterType::And(filters) => filters.iter().all(|f| f.accepts(id, index)),
             FilterType::Or(filters) => filters.iter().any(|f| f.accepts(id, index)),
             FilterType::Not(filter) => !filter.accepts(id, index),

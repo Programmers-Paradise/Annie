@@ -35,6 +35,33 @@ pub struct AnnIndex {
     boolean_filters: Mutex<HashMap<String, BitVec>>,
 }
 
+#[derive(PartialEq, Debug)]
+struct FloatOrd(f32);
+
+impl Eq for FloatOrd {}
+
+impl Ord for FloatOrd {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.partial_cmp(&other.0).unwrap_or_else(|| {
+            if self.0.is_nan() && other.0.is_nan() {
+                std::cmp::Ordering::Equal
+            } else if self.0.is_nan() {
+                std::cmp::Ordering::Greater
+            } else if other.0.is_nan() {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
+    }
+}
+
+impl PartialOrd for FloatOrd {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[pymethods]
 impl AnnIndex {
     #[new]
@@ -365,7 +392,7 @@ impl AnnIndex {
         }
 
         // Precompute distances with filtering
-        let mut candidates: Vec<(i64, f32)> = self.entries
+        let candidates: Vec<(i64, f32)> = self.entries
             .par_iter()
             .enumerate()
             .filter(|(idx, (id, _, _))| {
@@ -393,38 +420,37 @@ impl AnnIndex {
                 Ok((*id, dist))
             })
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e: PyErr| RustAnnError::new(e.to_string()))?;
+            .map_err(|e: PyErr| RustAnnError::io_err(e.to_string()))?;
+        
+        if candidates.is_empty() {
+            return Ok((vec![], vec![]));
+        }
+
         // Use a min-heap to select top k efficiently
         use std::collections::BinaryHeap;
-        use std::cmp::Ordering;
         
-        // Reverse ordering for min-heap
-        #[derive(Eq, PartialEq)]
-        struct HeapItem(i64, f32);
-        impl Ord for HeapItem {
-            fn cmp(&self, other: &Self) -> Ordering {
-                // Compare by distance, reversed for min-heap
-                other.1.partial_cmp(&self.1).unwrap_or(Ordering::Equal)
-            }
-        }
-        impl PartialOrd for HeapItem {
-            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-                Some(self.cmp(other))
-            }
-        }
+        let k = k.min(candidates.len());
         let mut heap = BinaryHeap::with_capacity(k);
-        for (id, dist) in candidates.into_iter() {
+
+        for (id, dist) in candidates {
+            let candidate = (FloatOrd(dist), id);
             if heap.len() < k {
-                heap.push(HeapItem(id, dist));
-            } else if let Some(top) = heap.peek() {
-                if dist < top.1 {
+                heap.push(candidate);
+            } else {
+                // Compare candidate with the top of the heap
+                if candidate < *heap.peek().unwrap() {
                     heap.pop();
-                    heap.push(HeapItem(id, dist));
+                    heap.push(candidate);
                 }
             }
         }
-        let mut results: Vec<_> = heap.into_sorted_vec();
-        let (ids, dists): (Vec<i64>, Vec<f32>) = results.into_iter().map(|HeapItem(id, dist)| (id, dist)).unzip();
+
+        // Convert back to ascending order
+        let sorted = heap.into_sorted_vec();
+        let (ids, dists): (Vec<i64>, Vec<f32>) = sorted
+            .into_iter()
+            .map(|(FloatOrd(dist), id)| (id, dist))
+            .unzip();
 
         Ok((ids, dists))
     }
