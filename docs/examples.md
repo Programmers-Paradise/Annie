@@ -36,6 +36,15 @@ index.add(data, ids)
 
 # Define filter function
 def even_ids(id: int) -> bool:
+    """
+    Filter function to keep only even numbered IDs.
+
+    Args:
+        id (int): An ID.
+
+    Returns:
+        bool: True if ID is even, False otherwise.
+    """
     return id % 2 == 0
 
 # Filtered search
@@ -126,9 +135,20 @@ ids, dists = index.search(query, k=5)
 ## Custom Metrics
 ```python
 from rust_annie import AnnIndex, register_metric, list_metrics
+import numpy as np
 
 # Define a custom distance function
-def l1_5_distance(a, b):
+def l1_5_distance(a: np.ndarray, b: np.ndarray) -> float:
+    """
+    L1.5 norm distance function (between L1 and L2 norms).
+
+    Args:
+        a (np.ndarray): First vector.
+        b (np.ndarray): Second vector.
+
+    Returns:
+        float: L1.5 distance between a and b.
+    """
     return np.sum(np.abs(np.array(a) - np.array(b)) ** 1.5) ** (1.0 / 1.5)
 
 # Register the custom metric
@@ -459,6 +479,15 @@ index.add(data, ids)
 
 # Filter function
 def even_ids(id: int) -> bool:
+    """
+    Filter function to keep only even numbered IDs.
+
+    Args:
+        id (int): An ID.
+
+    Returns:
+        bool: True if ID is even, False otherwise.
+    """
     return id % 2 == 0
 
 # Filtered search
@@ -474,9 +503,20 @@ print(filtered_ids)  # [10, 30] (20 is filtered out)
 ### Custom Metrics
 ```python
 from rust_annie import AnnIndex, register_metric, list_metrics
+import numpy as np
 
 # Define a custom distance function
-def l1_5_distance(a, b):
+def l1_5_distance(a: np.ndarray, b: np.ndarray) -> float:
+    """
+    L1.5 norm distance function (between L1 and L2 norms).
+
+    Args:
+        a (np.ndarray): First vector.
+        b (np.ndarray): Second vector.
+
+    Returns:
+        float: L1.5 distance between a and b.
+    """
     return np.sum(np.abs(np.array(a) - np.array(b)) ** 1.5) ** (1.0 / 1.5)
 
 # Register the custom metric
