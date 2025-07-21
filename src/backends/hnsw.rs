@@ -39,6 +39,34 @@ impl AnnBackend for HnswIndex {
         }
     }
 
+    fn remove(&mut self, id: usize) {
+        // HNSW doesn't support removal, mark as deleted
+        self.deleted.insert(id);
+    }
+
+    fn update(&mut self, id: usize, vector: Vec<f32>) {
+        if !self.deleted.contains(&id) {
+            self.index.remove(id); // Remove old vector
+            self.index.insert((&vector, id)); // Add updated vector
+        }
+    }
+
+    fn compact(&mut self) {
+        // Rebuild index without deleted items
+        let mut new_index = Hnsw::new(/* params */);
+        for (id, vec) in self.vectors.iter().enumerate() {
+            if !self.deleted.contains(&id) {
+                new_index.insert((vec, id));
+            }
+        }
+        self.index = new_index;
+        self.deleted.clear();
+    }
+
+    fn version(&self) -> u64 {
+        self.version
+    }
+
     fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)> {
         self.index
             .search(query, k, 50)

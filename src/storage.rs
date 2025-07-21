@@ -11,10 +11,30 @@ use bincode;
 use crate::errors::RustAnnError;
 use crate::index::AnnIndex;
 
+#[derive(Serialize, Deserialize)]
+struct SerializedAnnIndex {
+    dim: usize,
+    metric: Distance,
+    minkowski_p: Option<f32>,
+    entries: Vec<Option<(i64, Vec<f32>, f32)>>,
+    deleted_count: usize,
+    max_deleted_ratio: f32,
+    version: u64,
+}
+
 /// Serialize and write the given index to `path` using bincode.
 ///
 /// Returns a Python IOError on failure.
 pub fn save_index(idx: &AnnIndex, path: &str) -> Result<(), RustAnnError> {
+    let serialized = SerializedAnnIndex {
+        dim: idx.dim,
+        metric: idx.metric.clone(),
+        minkowski_p: idx.minkowski_p,
+        entries: idx.entries.clone(),
+        deleted_count: idx.deleted_count,
+        max_deleted_ratio: idx.max_deleted_ratio,
+        version: *idx.version.lock().unwrap(),
+    };
     let path = Path::new(path);
     let file = File::create(path)
         .map_err(|e| RustAnnError::io_err(format!("Failed to create file {}: {}", path.display(), e)))?;
@@ -34,5 +54,15 @@ pub fn load_index(path: &str) -> Result<AnnIndex, RustAnnError> {
     let reader = BufReader::new(file);
     let idx: AnnIndex = bincode::deserialize_from(reader)
         .map_err(|e| RustAnnError::io_err(format!("Deserialization error: {}", e)))?;
-    Ok(idx)
+    Ok(AnnIndex {
+        dim: serialized.dim,
+        metric: serialized.metric,
+        minkowski_p: serialized.minkowski_p,
+        entries: serialized.entries,
+        deleted_count: serialized.deleted_count,
+        max_deleted_ratio: serialized.max_deleted_ratio,
+        metrics: None,
+        boolean_filters: Mutex::new(HashMap::new()),
+        version: Arc::new(Mutex::new(serialized.version)),
+    })
 }
