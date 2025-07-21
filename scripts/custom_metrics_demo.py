@@ -4,7 +4,11 @@ Example demonstrating the pluggable distance metric registry.
 import numpy as np
 from rust_annie import AnnIndex, Distance, register_metric, list_metrics
 
-def main():
+def main() -> None:
+    """
+    Demonstrates custom metric registration and ANN querying
+    using rust_annie with built-in and user-defined distances.
+    """ 
     print("=== Pluggable Distance Metric Registry Demo ===\n")
     
     # 1. Show built-in metrics
@@ -17,7 +21,17 @@ def main():
     # 2. Register a custom L1.5 distance metric
     print("2. Registering custom L1.5 distance metric...")
     
-    def l1_5_distance(a, b):
+    def l1_5_distance(a: np.ndarray, b: np.ndarray) -> float:
+        """
+        L1.5 norm distance function (between L1 and L2 norms).
+
+        Args:
+        a (np.ndarray): First vector.
+        b (np.ndarray): Second vector.
+
+        Returns:
+        float: L1.5 distance between a and b.
+    """
         """L1.5 norm distance (between Manhattan and Euclidean)"""
         a = np.asarray(a)
         b = np.asarray(b)
@@ -36,7 +50,17 @@ def main():
     cov_matrix = np.array([[2.0, 0.3], [0.3, 1.0]], dtype=np.float32)
     cov_inv = np.linalg.inv(cov_matrix)
     
-    def mahalanobis_distance(a, b):
+    def mahalanobis_distance(a: np.ndarray, b: np.ndarray) -> float:
+        """
+        ahalanobis distance using a predefined covariance matrix.
+
+        Args:
+        a (np.ndarray): First vector.
+        b (np.ndarray): Second vector.
+
+        Returns:
+        float: Mahalanobis distance between a and b.
+    """
         """Mahalanobis distance using predefined covariance matrix"""
         global cov_inv
         if 'cov_inv' not in globals():
