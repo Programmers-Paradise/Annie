@@ -34,7 +34,7 @@ pub fn save_index(idx: &AnnIndex, path: &str) -> Result<(), RustAnnError> {
         entries: idx.entries.iter().map(|e| e.as_ref().map(|(id, v, s)| (*id, v.clone(), *s))).collect(),
         deleted_count: idx.deleted_count,
         max_deleted_ratio: idx.max_deleted_ratio,
-        version: *idx.version.lock().unwrap(),
+        version: idx.version(),
     };
     let path = Path::new(path);
     let file = File::create(path)

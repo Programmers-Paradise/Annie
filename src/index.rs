@@ -311,7 +311,7 @@ impl AnnIndex {
         self.boolean_filters.lock().unwrap().clear();
         
         if let Some(metrics) = &self.metrics {
-           (**metrics).record_compaction(original_len, self.entries.len());
+        //    (**metrics).record_compaction(original_len, self.entries.len());
         }
         
         Ok(())
