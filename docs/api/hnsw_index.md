@@ -33,6 +33,25 @@ Search for k approximate nearest neighbors.
 - `k`: Number of neighbors to return
 - Returns: Neighbor IDs
 
+### `remove(id: int)`
+Remove a vector from the index by its ID.
+
+- `id`: ID of the vector to remove
+
+### `update(id: int, vector: ndarray)`
+Update a vector in the index.
+
+- `id`: ID of the vector to update
+- `vector`: New vector data
+
+### `compact()`
+Compact the index by removing deleted entries.
+
+### `version() -> int`
+Get the current version of the index.
+
+- Returns: Version number
+
 ### `save(path: str)`
 Save index to disk.
 
@@ -90,6 +109,18 @@ index.add_batch(data, ids, progress_callback=progress_callback)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids = index.search(query, k=10)
+
+# Remove a vector
+index.remove(5)
+
+# Update a vector
+index.update(10, np.random.rand(128).astype(np.float32))
+
+# Compact the index
+index.compact()
+
+# Get the version of the index
+print(index.version())
 
 # Save index
 index.save("index.bin")
@@ -216,6 +247,18 @@ index.add_batch(data, ids, progress_callback=progress_callback)
 # Search
 query = np.random.rand(128).astype(np.float32)
 neighbor_ids = index.search(query, k=10)
+
+# Remove a vector
+index.remove(5)
+
+# Update a vector
+index.update(10, np.random.rand(128).astype(np.float32))
+
+# Compact the index
+index.compact()
+
+# Get the version of the index
+print(index.version())
 
 # Save index
 index.save("index.bin")
@@ -370,6 +413,10 @@ Same API as `AnnIndex`, safe for concurrent use.
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
+| remove(id)                            | Remove a vector by ID                      |
+| update(id, vector)                    | Update a vector by ID                      |
+| compact()                             | Compact the index                          |
+| version()                             | Get the current version of the index       |
 | save(path)                            | Save index to disk                         | 
 | load(path)                            | Load index from disk                       | 
 

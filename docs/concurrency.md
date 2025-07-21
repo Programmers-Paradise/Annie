@@ -5,10 +5,11 @@ Annie exposes a thread-safe version of its ANN index (`AnnIndex`) for use in Pyt
 ## Key Features
 
 - Safe concurrent read access (`search`, `search_batch`)
-- Exclusive write access (`add`, `remove`)
+- Exclusive write access (`add`, `remove`, `update`, `compact`)
 - Backed by Rust `RwLock` and exposed via PyO3
 - `PyHnswIndex` supports mapping internal IDs to user IDs and handling vector data efficiently
 - Enhanced error handling for read and write lock acquisition
+- Versioning system to manage concurrent modifications
 
 ## Example
 
@@ -98,6 +99,15 @@ Add vectors to the index.
 - `data`: N×dim array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
 
+### `remove(ids: List[int])`
+Remove vectors by IDs.
+
+### `update(id: int, vector: ndarray)`
+Update a vector by ID.
+
+### `compact()`
+Compact the index by removing deleted entries.
+
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
 Search for k nearest neighbors.
 
@@ -126,6 +136,9 @@ Save index to disk.
 
 ### `static load(path: str) -> AnnIndex`
 Load index from disk.
+
+### `version() -> int`
+Get the current version of the index.
 
 ## Example
 
@@ -219,6 +232,12 @@ Thread-safe vector addition.
 ### `remove(ids: List[int])`
 Thread-safe removal by IDs.
 
+### `update(id: int, vector: ndarray)`
+Thread-safe update of a vector by ID.
+
+### `compact()`
+Thread-safe compaction of the index.
+
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
 Thread-safe single query search.
 
@@ -230,6 +249,9 @@ Thread-safe save.
 
 ### `static load(path: str) -> ThreadSafeAnnIndex`
 Thread-safe load.
+
+### `version() -> int`
+Get the current version of the index.
 
 ## Example
 
