@@ -65,9 +65,10 @@ The library now supports filtered search using custom Python callbacks, allowing
 ```python
 from rust_annie import AnnIndex, Distance, Filter
 import numpy as np
+from typing import Set, Tuple
 
 # Create index
-index = AnnIndex(3, Distance.EUCLIDEAN)
+index = AnnIndex.new(3, Distance.Euclidean)
 data = np.array([
     [1.0, 2.0, 3.0],
     [4.0, 5.0, 6.0],
@@ -77,17 +78,26 @@ ids = np.array([10, 20, 30], dtype=np.int64)
 index.add(data, ids)
 
 # Filter function
-def even_ids(id: int) -> bool:
-    return id % 2 == 0
+def even_id_filter(i: int) -> bool:
+    """
+    Filter function to keep only even numbered IDs.
+
+    Args:
+        i (int): An ID.
+
+    Returns:
+        bool: True if ID is even, False otherwise.
+    """
+    return i % 2 == 0
 
 # Filtered search
-query = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-filtered_ids, filtered_dists = index.search_filter_py(
-    query, 
-    k=3, 
-    filter_fn=even_ids
-)
-print(filtered_ids)  # [10, 30] (20 is filtered out)
+query = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+allowed_ids: Set[int] = set(filter(even_id_filter, ids))
+result: Tuple[np.ndarray, np.ndarray] = index.search_filter(query, k=2, allowed_ids=allowed_ids)
+ids, dists = result[0], result[1]
+
+print("Filtered IDs:", ids)  # [10, 30] (20 is filtered out)
+print("Distances:", dists)
 ```
 
 ### Sorting Behavior
