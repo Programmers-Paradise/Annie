@@ -14,27 +14,34 @@ DATASETS = {
     "large": {"N": 1_000_000, "D": 256, "k": 50}
 }
 
+import os
+import psutil
 def measure_memory() -> float:
     """
     Measures the current process's memory usage in megabytes.
-
     Returns:
         float: Memory usage in MB.
     """
     process = psutil.Process(os.getpid())
     return process.memory_info().rss / (1024 ** 2)  # MB
 
-def benchmark(dataset: str = "medium", repeats: int = 50) -> Dict[str, Any]:
+def benchmark(dataset: str = "medium", repeats: int = 50, batch_size: int = 10000) -> Dict[str, Any]:
     """
     Runs benchmarks on multiple ANN libraries using synthetic datasets.
-
     Args:
         dataset (str): Dataset size category - small, medium or large.
         repeats (int): Number of query repetitions.
-
+        batch_size (int): Number of rows to process at a time to reduce memory usage.
     Returns:
         Dict[str, Any]: Benchmark results including memory usage and timing stats.
     """
+    config = DATASETS[dataset]
+    N, D, k = config["N"], config["D"], config["k"]
+    # Example: generate and process data in batches to avoid high memory usage
+    # for i in range(0, N, batch_size):
+    #     X_batch = ... # generate or load batch
+    #     ... # process batch
+    # Adjust downstream code to use batches instead of full arrays
     config = DATASETS[dataset]
     N, D, k = config["N"], config["D"], config["k"]
     

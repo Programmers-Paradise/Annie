@@ -27,7 +27,7 @@ def even_id_filter(i: int) -> bool:
 
 query = np.array([0.0, 0.0, 0.0], dtype=np.float32)
 allowed_ids: Set[int] = set(filter(even_id_filter, ids))
-result: Tuple[np.ndarray, np.ndarray] = index.search_filter(query, k=2, allowed_ids=allowed_ids)
+result: Tuple[np.ndarray, np.ndarray] = index.search_filter(query, k=2, allowed_ids=list(allowed_ids))
 ids, dists = result[0], result[1]
 
 print("Filtered IDs:", ids)
