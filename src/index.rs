@@ -33,13 +33,11 @@ pub struct AnnIndex {
     pub(crate) max_deleted_ratio: f32,
     /// Optional metrics collector for monitoring
     #[serde(skip)]
-    metrics: Option<Arc<MetricsCollector>>,
-    /// Precomputed boolean filters (name -> BitVec)
+    pub(crate) metrics: Option<Arc<MetricsCollector>>,
     #[serde(skip)]
-    boolean_filters: Mutex<HashMap<String, BitVec>>,
-    /// Version counter for concurrent access
+    pub(crate) boolean_filters: Mutex<HashMap<String, BitVec>>,
     #[serde(skip)]
-    version: Arc<Mutex<u64>>,
+    pub(crate) version: Arc<Mutex<u64>>,
 }
 
 #[derive(PartialEq, Debug)]
