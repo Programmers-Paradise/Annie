@@ -5,7 +5,7 @@ use ndarray::s;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use bit_vec::BitVec;
 
@@ -21,18 +21,23 @@ use crate::filters::Filter;
 /// A brute-force k-NN index with cached norms, Rayon parallelism,
 /// built-in filters, and support for multiple distance metrics.
 pub struct AnnIndex {
-    dim: usize,
-    metric: Distance,
+    pub(crate) dim: usize,
+    pub(crate) metric: Distance,
     /// If Some(p), use Minkowski-p distance instead of `metric`.
-    minkowski_p: Option<f32>,
+    pub(crate) minkowski_p: Option<f32>,
     /// Stored entries as (id, vector, squared_norm) tuples.
-    entries: Vec<(i64, Vec<f32>, f32)>,
+    pub(crate) entries: Vec<Option<(i64, Vec<f32>, f32)>>,
+    /// Tracks deleted entries for compaction
+    pub(crate) deleted_count: usize,
+    /// Maximum allowed deleted entries before compaction
+    pub(crate) max_deleted_ratio: f32,
     /// Optional metrics collector for monitoring
     #[serde(skip)]
-    metrics: Option<Arc<MetricsCollector>>,
-    /// Precomputed boolean filters (name -> BitVec)
+    pub(crate) metrics: Option<Arc<MetricsCollector>>,
     #[serde(skip)]
-    boolean_filters: Mutex<HashMap<String, BitVec>>,
+    pub(crate) boolean_filters: Mutex<HashMap<String, BitVec>>,
+    #[serde(skip)]
+    pub(crate) version: Arc<Mutex<u64>>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -75,8 +80,11 @@ impl AnnIndex {
             metric,
             minkowski_p: None,
             entries: Vec::new(),
+            deleted_count: 0,
+            max_deleted_ratio: 0.2, // 20% deleted triggers compaction
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
+            version: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -94,8 +102,11 @@ impl AnnIndex {
             metric: Distance::Minkowski(p),
             minkowski_p: Some(p),
             entries: Vec::new(),
+            deleted_count: 0,
+            max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
+            version: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -111,8 +122,11 @@ impl AnnIndex {
             metric,
             minkowski_p: None,
             entries: Vec::new(),
+            deleted_count: 0,
+            max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
+            version: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -148,7 +162,19 @@ impl AnnIndex {
         if view.ncols() != self.dim {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, view.ncols())));
         }
-        
+
+        // Check for duplicate IDs
+        let existing_ids: HashSet<i64> = self.entries.iter()
+            .filter_map(|e| e.as_ref().map(|(id, _, _)| *id))
+            .collect();
+        let duplicates: Vec<_> = ids.iter()
+            .filter(|id| existing_ids.contains(id))
+            .copied()
+            .collect();
+        if !duplicates.is_empty() {
+            return Err(RustAnnError::py_err("Duplicate IDs", format!("Found duplicate IDs: {:?}", duplicates)));
+        }
+
         self.entries.reserve(n);
         let chunk_size = 1000; // vectors per chunk
         let num_chunks = (n + chunk_size - 1) / chunk_size;
@@ -159,13 +185,13 @@ impl AnnIndex {
             let chunk_view = view.slice(s![start..end, ..]);
             let chunk_ids = &ids[start..end];
             
-            let new_entries: Vec<(i64, Vec<f32>, f32)> = chunk_view.outer_iter()
+            let new_entries: Vec<Option<(i64, Vec<f32>, f32)>> = chunk_view.outer_iter()
                 .zip(chunk_ids)
                 .par_bridge()
                 .map(|(row, &id)| {
                     let v = row.to_vec();
                     let sq_norm = v.iter().map(|x| x * x).sum::<f32>();
-                    (id, v, sq_norm)
+                    Some((id, v, sq_norm))
                 })
                 .collect();
             self.entries.extend(new_entries);
@@ -179,6 +205,9 @@ impl AnnIndex {
                 })?;
             }
         }
+        
+        // Increment version
+        *self.version.lock().unwrap() += 1;
         
         // Invalidate boolean filters since entries changed
         self.boolean_filters.lock().unwrap().clear();
@@ -196,19 +225,105 @@ impl AnnIndex {
                 Distance::Canberra() => "canberra".to_string(),
                 Distance::Custom(n) => n.clone(),
             };
-            metrics.set_index_metadata(self.entries.len(), self.dim, &metric_name);
+            metrics.set_index_metadata(self.len(), self.dim, &metric_name);
         }
         Ok(())
     }
 
     /// Remove entries by ID.
     pub fn remove(&mut self, ids: Vec<i64>) -> PyResult<()> {
-        if !ids.is_empty() {
-            let to_rm: std::collections::HashSet<i64> = ids.into_iter().collect();
-            self.entries.retain(|(id, _, _)| !to_rm.contains(id));
-            // Invalidate boolean filters since entries changed
-            self.boolean_filters.lock().unwrap().clear();
+        if ids.is_empty() {
+            return Ok(());
         }
+        
+        let to_remove: HashSet<i64> = ids.into_iter().collect();
+        let mut removed_count = 0;
+        
+        for entry in &mut self.entries {
+            if let Some((id, _, _)) = entry {
+                if to_remove.contains(id) {
+                    *entry = None;
+                    removed_count += 1;
+                }
+            }
+        }
+        
+        self.deleted_count += removed_count;
+        
+        // Always compact if deleted_count is large, or provide a manual compact option for users to reclaim memory immediately.
+        if self.should_compact() || self.deleted_count > 100_000 {
+            self.compact()?;
+        }
+        Ok(())
+    }
+
+    pub fn update(&mut self, id: i64, vector: Vec<f32>) -> PyResult<()> {
+        if vector.len() != self.dim {
+            return Err(RustAnnError::py_err(
+                "Dimension Error", 
+                format!("Expected dimension {}, got {}", self.dim, vector.len())
+            ));
+        }
+        
+        let mut found = false;
+        let sq_norm = vector.iter().map(|x| x * x).sum::<f32>();
+        
+        for entry in &mut self.entries {
+            if let Some((entry_id, ref mut vec, ref mut norm)) = entry {
+                if *entry_id == id {
+                    *vec = vector.clone();
+                    *norm = sq_norm;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        if !found {
+            return Err(RustAnnError::py_err(
+                "ID Not Found", 
+                format!("ID {} not found in index", id)
+            ));
+        }
+        
+        // Increment version
+        *self.version.lock().unwrap() += 1;
+        
+        Ok(())
+    }
+
+    /// Compact index by removing deleted entries
+    pub fn compact(&mut self) -> PyResult<()> {
+        if self.deleted_count == 0 {
+            return Ok(());
+        }
+        
+        let original_len = self.entries.len();
+        self.entries.retain(|e| e.is_some());
+        self.deleted_count = 0;
+        
+        // Increment version
+        *self.version.lock().unwrap() += 1;
+        
+        // Clear filters after compaction
+        self.boolean_filters.lock().unwrap().clear();
+        
+        if let Some(metrics) = &self.metrics {
+        //    (**metrics).record_compaction(original_len, self.entries.len());
+        }
+        
+        Ok(())
+    }
+
+    /// Set maximum deleted ratio before auto-compaction
+    pub fn set_max_deleted_ratio(&mut self, ratio: f32) -> PyResult<()> {
+        if !(0.0..=1.0).contains(&ratio) {
+            return Err(RustAnnError::py_err(
+                "Invalid Ratio", 
+                "Ratio must be between 0.0 and 1.0"
+            ));
+        }
+        self.max_deleted_ratio = ratio;
         Ok(())
     }
 
@@ -220,14 +335,18 @@ impl AnnIndex {
         k: usize,
         filter: Option<Filter>
     ) -> PyResult<(PyObject, PyObject)> {
-        if self.entries.is_empty() {
+        if self.entries.is_empty() || self.len() == 0 {
             return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
         }
         let q = query.as_slice()?;
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
         let start = Instant::now();
         
-        let (ids, dists) = py.allow_threads(|| self.inner_search(q, q_sq, k, filter.as_ref()))?;
+        let version = *self.version.lock().unwrap();
+
+        let (ids, dists) = py.allow_threads(|| {
+            self.inner_search(q, q_sq, k, filter.as_ref(), version)
+        })?;
         
         if let Some(metrics) = &self.metrics {
             metrics.record_query(start.elapsed());
@@ -249,12 +368,13 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
+        let version = *self.version.lock().unwrap();
         let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
                 let row = arr.row(i).to_vec();
                 let q_sq = row.iter().map(|x| x * x).sum::<f32>();
-                self.inner_search(&row, q_sq, k, filter_ref)
+                self.inner_search(&row, q_sq, k, filter_ref, version)
                     .map_err(|e| RustAnnError::io_err(format!("Parallel search failed: {}", e)))
             }).collect()
         });
@@ -284,8 +404,25 @@ impl AnnIndex {
     }
 
     /// Number of entries.
-    pub fn len(&self) -> usize { self.entries.len() }
-    pub fn __len__(&self) -> usize { self.entries.len() }
+    pub fn len(&self) -> usize { 
+        self.entries.iter().filter(|e| e.is_some()).count()
+    }
+    
+    pub fn __len__(&self) -> usize { self.len() }
+
+    pub fn capacity(&self) -> usize {
+        self.entries.len()
+    }
+    
+    /// Deleted entry count
+    pub fn deleted_count(&self) -> usize {
+        self.deleted_count
+    }
+    
+    /// Current version
+    pub fn version(&self) -> u64 {
+        *self.version.lock().unwrap()
+    }
 
     /// Vector dimension.
     pub fn dim(&self) -> usize { self.dim }
@@ -380,47 +517,58 @@ impl AnnIndex {
 }
 
 impl AnnIndex {
+    fn should_compact(&self) -> bool {
+        let total = self.entries.len();
+        total > 0 && (self.deleted_count as f32 / total as f32) > self.max_deleted_ratio
+    }
+
     fn inner_search(
         &self,
         q: &[f32],
         q_sq: f32,
         k: usize,
         filter: Option<&Filter>,
+        version: u64,
     ) -> PyResult<(Vec<i64>, Vec<f32>)> {
+        if version != *self.version.lock().unwrap() {
+            return Err(RustAnnError::py_err(
+                "ConcurrentModification", 
+                "Index modified during search operation"
+            ));
+        }
+
         if q.len() != self.dim {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, q.len())));
         }
 
-        // Precompute distances with filtering
         let candidates: Vec<(i64, f32)> = self.entries
             .par_iter()
             .enumerate()
-            .filter(|(idx, (id, _, _))| {
-                match filter {
-                    Some(f) => f.accepts(*id, *idx),
-                    None => true,
-                }
-            })
-            .map(|(_, (id, vec, sq_norm))| {
-                let dist = match self.metric {
-                    Distance::Euclidean() => crate::metrics::euclidean_sq(q, vec, q_sq, *sq_norm),
-                    Distance::Cosine() => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
-                    Distance::Manhattan() => crate::metrics::manhattan(q, vec),
-                    Distance::Chebyshev() => crate::metrics::chebyshev(q, vec),
-                    Distance::Minkowski(p) => crate::metrics::minkowski(q, vec, p),
-                    Distance::Hamming() => crate::metrics::hamming(q, vec),
-                    Distance::Jaccard() => crate::metrics::jaccard(q, vec),
-                    Distance::Angular() => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
-                    Distance::Canberra() => crate::metrics::canberra(q, vec),
-                    Distance::Custom(ref name) => {
-                        return Err(RustAnnError::py_err("UnsupportedMetric", 
-                            format!("Custom metric '{}' not implemented", name)));
+            .filter_map(|(idx, entry_opt)| {
+                // skip deleted entries
+                 let (id, vec, sq_norm) = entry_opt.as_ref()?;
+                // apply user-provided filter
+                if let Some(f) = filter {
+                    if !f.accepts(*id, idx) {
+                        return None;
                     }
+                }
+                // compute the distance
+                let dist = match self.metric {
+                    Distance::Euclidean()   => crate::metrics::euclidean_sq(q, vec, q_sq, *sq_norm),
+                    Distance::Cosine()      => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
+                    Distance::Manhattan()   => crate::metrics::manhattan(q, vec),
+                    Distance::Chebyshev()   => crate::metrics::chebyshev(q, vec),
+                    Distance::Minkowski(p)  => crate::metrics::minkowski(q, vec, p),
+                    Distance::Hamming()     => crate::metrics::hamming(q, vec),
+                    Distance::Jaccard()     => crate::metrics::jaccard(q, vec),
+                    Distance::Angular()     => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
+                    Distance::Canberra()    => crate::metrics::canberra(q, vec),
+                    Distance::Custom(_) => return None, // or error out
                 };
-                Ok((*id, dist))
+                Some((*id, dist))
             })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e: PyErr| RustAnnError::io_err(e.to_string()))?;
+            .collect();
         
         if candidates.is_empty() {
             return Ok((vec![], vec![]));
@@ -482,33 +630,36 @@ impl AnnIndex {
 }
 
 impl AnnBackend for AnnIndex {
-    fn new(dim: usize, metric: Distance) -> Self { 
-        AnnIndex { 
-            dim, 
-            metric, 
-            minkowski_p: None, 
-            entries: Vec::new(), 
+    fn new(dim: usize, metric: Distance) -> Self {
+        AnnIndex {
+            dim,
+            metric,
+            minkowski_p: None,
+            entries: Vec::new(),
+            deleted_count: 0,
+            max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-        } 
+            version: Arc::new(Mutex::new(0)),
+        }
     }
     
     fn add_item(&mut self, item: Vec<f32>) {
         let id = self.entries.len() as i64;
         let sq = item.iter().map(|x| x * x).sum::<f32>();
-        self.entries.push((id, item, sq));
+        self.entries.push(Some((id, item, sq)));
     }
     
     fn build(&mut self) {}
     
     fn search(&self, vector: &[f32], k: usize) -> Vec<usize> { 
         let q_sq = vector.iter().map(|x| x * x).sum();
-        self.inner_search(vector, q_sq, k, None)
+         self.inner_search(vector, q_sq, k, None, self.version())
             .unwrap_or_default()
             .0
             .into_iter()
             .map(|id| id as usize)
-            .collect() 
+            .collect()
     }
     
     fn save(&self, path: &str) { 

@@ -46,6 +46,25 @@ impl ThreadSafeAnnIndex {
         guard.remove(ids)
     }
 
+    pub fn update(&self, _py: Python, id: i64, vector: Vec<f32>) -> PyResult<()> {
+        let mut guard = self.inner.write().map_err(|e| {
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
+        })?;
+        guard.update(id, vector).map_err(|e| RustAnnError::py_err("Update Error", format!("Failed to update: {}", e)))
+    }
+
+    pub fn compact(&self, _py: Python) -> PyResult<()> {
+        let mut guard = self.inner.write().map_err(|e| {
+            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
+        })?;
+        guard.compact().map_err(|e| RustAnnError::py_err("Compact Error", format!("Failed to compact: {}", e)))
+    }
+    
+    pub fn version(&self, _py: Python) -> u64 {
+        let guard = self.inner.read().unwrap();
+        guard.version()
+    }
+
     /// Single-vector k-NN search.
     pub fn search(
         &self,

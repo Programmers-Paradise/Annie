@@ -19,6 +19,33 @@ impl AnnBackend for BruteForceIndex {
         self.vectors.push(vector);
     }
 
+    fn remove(&mut self, id: usize) {
+        if id < self.vectors.len() {
+            self.vectors[id] = Vec::new(); // Mark as empty
+            self.deleted_count += 1;
+        }
+    }
+    fn update(&mut self, id: usize, vector: Vec<f32>) {
+        if id < self.vectors.len() && !self.vectors[id].is_empty() {
+            self.vectors[id] = vector;
+        }
+    }
+
+    fn compact(&mut self) {
+        let mut new_vectors = Vec::with_capacity(self.vectors.len() - self.deleted_count);
+        for v in self.vectors.iter() {
+            if !v.is_empty() {
+                new_vectors.push(v.clone());
+            }
+        }
+        self.vectors = new_vectors;
+        self.deleted_count = 0;
+    }
+
+    fn version(&self) -> u64 {
+        self.version
+    }
+
     fn add_batch(&mut self, mut vectors: Vec<Vec<f32>>) {
         self.vectors.append(&mut vectors);
     }
