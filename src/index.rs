@@ -104,9 +104,11 @@ impl AnnIndex {
             metric: Distance::Minkowski(p),
             minkowski_p: Some(p),
             entries: Vec::new(),
+            deleted_count: 0,
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
+            version: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -122,9 +124,11 @@ impl AnnIndex {
             metric,
             minkowski_p: None,
             entries: Vec::new(),
+            deleted_count: 0,
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
+            version: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -370,6 +374,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
+        let version = *self.version.lock().unwrap();
         let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
@@ -565,7 +570,7 @@ impl AnnIndex {
                     Distance::Jaccard()     => crate::metrics::jaccard(q, vec),
                     Distance::Angular()     => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
                     Distance::Canberra()    => crate::metrics::canberra(q, vec),
-                    Distance::Custom(ref _) => return None, // or error out
+                    Distance::Custom(_) => return None, // or error out
                 };
                 Some((*id, dist))
             })

@@ -1,5 +1,3 @@
-// src/storage.rs
-
 use std::{
     fs::File,
     io::{BufReader, BufWriter},
@@ -7,7 +5,10 @@ use std::{
 };
 
 use bincode;
-
+use serde::{Serialize, Deserialize};
+use crate::metrics::Distance;
+use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 use crate::errors::RustAnnError;
 use crate::index::AnnIndex;
 
@@ -52,7 +53,8 @@ pub fn load_index(path: &str) -> Result<AnnIndex, RustAnnError> {
     let file = File::open(path)
         .map_err(|e| RustAnnError::io_err(format!("Failed to open file {}: {}", path.display(), e)))?;
     let reader = BufReader::new(file);
-    let idx: AnnIndex = bincode::deserialize_from(reader)
+    // First read into the serialized representation
+    let serialized: SerializedAnnIndex = bincode::deserialize_from(reader)
         .map_err(|e| RustAnnError::io_err(format!("Deserialization error: {}", e)))?;
     Ok(AnnIndex {
         dim: serialized.dim,
