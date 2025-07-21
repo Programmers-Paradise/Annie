@@ -23,6 +23,15 @@ Thread-safe vector addition.
 ### `remove(ids: List[int])`
 Thread-safe removal by IDs.
 
+### `update(id: int, vector: ndarray)`
+Thread-safe update of a vector by ID.
+
+### `compact()`
+Thread-safe compaction of the index to remove deleted entries.
+
+### `version() -> int`
+Returns the current version of the index, useful for tracking changes.
+
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
 Thread-safe single query search.
 
@@ -71,6 +80,16 @@ def even_ids(id: int) -> bool:
 query = np.random.rand(128).astype(np.float32)
 filtered_ids, filtered_dists = index.search_filter_py(query, k=5, filter_fn=even_ids)
 print(filtered_ids)
+
+# Update a vector
+index.update(10, np.random.rand(128).astype(np.float32))
+
+# Compact the index
+index.compact()
+
+# Get the current version
+current_version = index.version()
+print(f"Current index version: {current_version}")
 ```
 
 ## Core Classes
@@ -87,6 +106,10 @@ print(filtered_ids)
 | Method                                | Description                                | 
 | ------------------------------------- | ------------------------------------------ |
 | add(data, ids)	                    | Add vectors to index                       | 
+| remove(ids)                           | Remove vectors by IDs                      |
+| update(id, vector)                    | Update a vector by ID                      |
+| compact()                             | Compact the index to remove deleted entries|
+| version()                             | Get the current version of the index       |
 | search(query, k)	                    | Single query search                        | 
 | search_batch(queries, k)              | Batch query search                         | 
 | search_filter_py(query, k, filter_fn) | Filtered search                            | 
