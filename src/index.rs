@@ -21,16 +21,16 @@ use crate::filters::Filter;
 /// A brute-force k-NN index with cached norms, Rayon parallelism,
 /// built-in filters, and support for multiple distance metrics.
 pub struct AnnIndex {
-    dim: usize,
-    metric: Distance,
+    pub(crate) dim: usize,
+    pub(crate) metric: Distance,
     /// If Some(p), use Minkowski-p distance instead of `metric`.
-    minkowski_p: Option<f32>,
+    pub(crate) minkowski_p: Option<f32>,
     /// Stored entries as (id, vector, squared_norm) tuples.
-    entries: Vec<Option<(i64, Vec<f32>, f32)>>,
+    pub(crate) entries: Vec<Option<(i64, Vec<f32>, f32)>>,
     /// Tracks deleted entries for compaction
-    deleted_count: usize,
+    pub(crate) deleted_count: usize,
     /// Maximum allowed deleted entries before compaction
-    max_deleted_ratio: f32,
+    pub(crate) max_deleted_ratio: f32,
     /// Optional metrics collector for monitoring
     #[serde(skip)]
     metrics: Option<Arc<MetricsCollector>>,
@@ -256,6 +256,7 @@ impl AnnIndex {
         if self.should_compact() || self.deleted_count > 100_000 {
             self.compact()?;
         }
+        Ok(())
     }
 
     pub fn update(&mut self, id: i64, vector: Vec<f32>) -> PyResult<()> {
@@ -310,7 +311,7 @@ impl AnnIndex {
         self.boolean_filters.lock().unwrap().clear();
         
         if let Some(metrics) = &self.metrics {
-           metrics.record_compaction(original_len, self.entries.len());
+           (**metrics).record_compaction(original_len, self.entries.len());
         }
         
         Ok(())
@@ -547,7 +548,7 @@ impl AnnIndex {
             .enumerate()
             .filter_map(|(idx, entry_opt)| {
                 // skip deleted entries
-                let (id, vec, sq_norm) = entry_opt?;
+                 let (id, vec, sq_norm) = entry_opt.as_ref()?;
                 // apply user-provided filter
                 if let Some(f) = filter {
                     if !f.accepts(*id, idx) {
@@ -631,15 +632,18 @@ impl AnnIndex {
 }
 
 impl AnnBackend for AnnIndex {
-    fn new(dim: usize, metric: Distance) -> Self { 
-        AnnIndex { 
-            dim, 
-            metric, 
-            minkowski_p: None, 
-            entries: Vec::new(), 
+    fn new(dim: usize, metric: Distance) -> Self {
+        AnnIndex {
+            dim,
+            metric,
+            minkowski_p: None,
+            entries: Vec::new(),
+            deleted_count: 0,
+            max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-        } 
+            version: Arc::new(Mutex::new(0)),
+        }
     }
     
     fn add_item(&mut self, item: Vec<f32>) {
@@ -652,12 +656,12 @@ impl AnnBackend for AnnIndex {
     
     fn search(&self, vector: &[f32], k: usize) -> Vec<usize> { 
         let q_sq = vector.iter().map(|x| x * x).sum();
-        self.inner_search(vector, q_sq, k, None)
+         self.inner_search(vector, q_sq, k, None, self.version())
             .unwrap_or_default()
             .0
             .into_iter()
             .map(|id| id as usize)
-            .collect() 
+            .collect()
     }
     
     fn save(&self, path: &str) { 
