@@ -31,7 +31,7 @@ pub fn save_index(idx: &AnnIndex, path: &str) -> Result<(), RustAnnError> {
         dim: idx.dim,
         metric: idx.metric.clone(),
         minkowski_p: idx.minkowski_p,
-        entries: idx.entries.clone(),
+        entries: idx.entries.iter().map(|e| e.as_ref().map(|(id, v, s)| (*id, v.clone(), *s))).collect(),
         deleted_count: idx.deleted_count,
         max_deleted_ratio: idx.max_deleted_ratio,
         version: *idx.version.lock().unwrap(),

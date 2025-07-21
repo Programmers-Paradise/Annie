@@ -48,11 +48,16 @@ impl AnnBackend for HnswIndex {
         if !self.deleted.contains(&id) {
             self.index.remove(id); // Remove old vector
             self.index.insert((&vector, id)); // Add updated vector
+            if let Some(v) = self.vectors.get_mut(id) {
+                *v = vector;
+            }
         }
     }
 
     fn compact(&mut self) {
-        // Rebuild index without deleted items
+        if self.deleted.is_empty() {
+            return;
+        }
         let mut new_index = Hnsw::new(/* params */);
         for (id, vec) in self.vectors.iter().enumerate() {
             if !self.deleted.contains(&id) {

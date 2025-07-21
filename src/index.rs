@@ -252,15 +252,10 @@ impl AnnIndex {
         
         self.deleted_count += removed_count;
         
-        // Auto-compact if needed
-        if self.should_compact() {
+        // Always compact if deleted_count is large, or provide a manual compact option for users to reclaim memory immediately.
+        if self.should_compact() || self.deleted_count > 100_000 {
             self.compact()?;
         }
-        
-        // Increment version
-        *self.version.lock().unwrap() += 1;
-        
-        Ok(())
     }
 
     pub fn update(&mut self, id: i64, vector: Vec<f32>) -> PyResult<()> {
@@ -411,7 +406,7 @@ impl AnnIndex {
 
     /// Number of entries.
     pub fn len(&self) -> usize { 
-        self.entries.len() - self.deleted_count 
+        self.entries.iter().filter(|e| e.is_some()).count()
     }
     
     pub fn __len__(&self) -> usize { self.len() }

@@ -8,7 +8,7 @@ pub trait AnnBackend {
     fn compact(&mut self);
     /// Search for k nearest neighbors.
     /// Returns Vec of (index, distance).
-    fn search(&self, query: &[f32], k: usize) -> Vec<usize>;
+    fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)>;
 
     /// Number of items stored.
     fn len(&self) -> usize;
