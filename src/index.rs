@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use bit_vec::BitVec;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::backend::AnnBackend;
 use crate::storage::{save_index, load_index};
@@ -37,7 +38,7 @@ pub struct AnnIndex {
     #[serde(skip)]
     pub(crate) boolean_filters: Mutex<HashMap<String, BitVec>>,
     #[serde(skip)]
-    pub(crate) version: Arc<Mutex<u64>>,
+    pub(crate) version: Arc<AtomicU64>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -84,7 +85,7 @@ impl AnnIndex {
             max_deleted_ratio: 0.2, // 20% deleted triggers compaction
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -106,7 +107,7 @@ impl AnnIndex {
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -126,7 +127,7 @@ impl AnnIndex {
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -164,7 +165,9 @@ impl AnnIndex {
         }
 
         // Check for duplicate IDs
-        let existing_ids: HashSet<i64> = self.entries.iter()
+        let existing_ids: HashSet<i64> = self.entries
+            .par_iter()
+            .with_min_len(1000)
             .filter_map(|e| e.as_ref().map(|(id, _, _)| *id))
             .collect();
         let duplicates: Vec<_> = ids.iter()
@@ -207,7 +210,7 @@ impl AnnIndex {
         }
         
         // Increment version
-        *self.version.lock().unwrap() += 1;
+        self.version.fetch_add(1, Ordering::Relaxed);
         
         // Invalidate boolean filters since entries changed
         self.boolean_filters.lock().unwrap().clear();
@@ -287,7 +290,7 @@ impl AnnIndex {
         }
         
         // Increment version
-        *self.version.lock().unwrap() += 1;
+        self.version.fetch_add(1, Ordering::Relaxed);
         
         Ok(())
     }
@@ -303,7 +306,7 @@ impl AnnIndex {
         self.deleted_count = 0;
         
         // Increment version
-        *self.version.lock().unwrap() += 1;
+        self.version.fetch_add(1, Ordering::Relaxed);
         
         // Clear filters after compaction
         self.boolean_filters.lock().unwrap().clear();
@@ -342,7 +345,7 @@ impl AnnIndex {
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
         let start = Instant::now();
         
-        let version = *self.version.lock().unwrap();
+        let version = self.version.load(Ordering::Relaxed);
 
         let (ids, dists) = py.allow_threads(|| {
             self.inner_search(q, q_sq, k, filter.as_ref(), version)
@@ -368,7 +371,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
-        let version = *self.version.lock().unwrap();
+        let version = self.version.load(Ordering::Relaxed);
         let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
@@ -421,7 +424,7 @@ impl AnnIndex {
     
     /// Current version
     pub fn version(&self) -> u64 {
-        *self.version.lock().unwrap()
+        self.version.load(Ordering::Relaxed)
     }
 
     /// Vector dimension.
@@ -599,7 +602,7 @@ impl AnnIndex {
         filter: Option<&Filter>,
         version: u64,
     ) -> PyResult<(Vec<i64>, Vec<f32>)> {
-        if version != *self.version.lock().unwrap() {
+        if version != self.version.load(Ordering::Relaxed) {
             return Err(RustAnnError::py_err(
                 "ConcurrentModification", 
                 "Index modified during search operation"
@@ -708,7 +711,7 @@ impl AnnBackend for AnnIndex {
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         }
     }
     

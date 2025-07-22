@@ -65,6 +65,6 @@ pub fn load_index(path: &str) -> Result<AnnIndex, RustAnnError> {
         max_deleted_ratio: serialized.max_deleted_ratio,
         metrics: None,
         boolean_filters: Mutex::new(HashMap::new()),
-        version: Arc::new(Mutex::new(serialized.version)),
+        version: Arc::new(AtomicU64::new(serialized.version)),
     })
 }
