@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use bit_vec::BitVec;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 use crate::backend::AnnBackend;
 use crate::storage::{save_index, load_index};
@@ -210,7 +210,7 @@ impl AnnIndex {
         }
         
         // Increment version
-        self.version.fetch_add(1, Ordering::Relaxed);
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         // Invalidate boolean filters since entries changed
         self.boolean_filters.lock().unwrap().clear();
@@ -290,7 +290,7 @@ impl AnnIndex {
         }
         
         // Increment version
-        self.version.fetch_add(1, Ordering::Relaxed);
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         Ok(())
     }
@@ -306,7 +306,7 @@ impl AnnIndex {
         self.deleted_count = 0;
         
         // Increment version
-        self.version.fetch_add(1, Ordering::Relaxed);
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         // Clear filters after compaction
         self.boolean_filters.lock().unwrap().clear();
@@ -345,7 +345,7 @@ impl AnnIndex {
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
         let start = Instant::now();
         
-        let version = self.version.load(Ordering::Relaxed);
+        let version = self.version.load(AtomicOrdering::Relaxed);
 
         let (ids, dists) = py.allow_threads(|| {
             self.inner_search(q, q_sq, k, filter.as_ref(), version)
@@ -371,7 +371,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
-        let version = self.version.load(Ordering::Relaxed);
+        let version = self.version.load(AtomicOrdering::Relaxed);
         let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
@@ -424,7 +424,7 @@ impl AnnIndex {
     
     /// Current version
     pub fn version(&self) -> u64 {
-        self.version.load(Ordering::Relaxed)
+        self.version.load(AtomicOrdering::Relaxed)
     }
 
     /// Vector dimension.
@@ -602,7 +602,7 @@ impl AnnIndex {
         filter: Option<&Filter>,
         version: u64,
     ) -> PyResult<(Vec<i64>, Vec<f32>)> {
-        if version != self.version.load(Ordering::Relaxed) {
+        if version != self.version.load(AtomicOrdering::Relaxed) {
             return Err(RustAnnError::py_err(
                 "ConcurrentModification", 
                 "Index modified during search operation"

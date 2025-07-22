@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use crate::errors::RustAnnError;
 use crate::index::AnnIndex;
+use std::sync::atomic::AtomicU64;
 
 #[derive(Serialize, Deserialize)]
 struct SerializedAnnIndex {
