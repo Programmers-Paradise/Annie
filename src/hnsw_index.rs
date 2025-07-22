@@ -86,7 +86,7 @@ impl HnswIndex {
         let mut info = HashMap::new();
         info.insert("type".to_string(), "hnsw".to_string());
         info.insert("dim".to_string(), self.dims.to_string());
-        info.insert("metric".to_string(), "euclidean".to_string());
+        info.insert("metric".to_string(), self.config.metric.clone());
         info.insert("size".to_string(), self.user_ids.len().to_string());
         info.insert("max_elements".to_string(), self.config.max_elements.to_string());
         info.insert("m".to_string(), self.config.m.to_string());

@@ -572,7 +572,7 @@ impl AnnIndex {
                 }
 
                 // Check norm matches vector
-                let computed_norm = vec.iter().map(|x| x * x).sum::<f32>();
+                let computed_norm = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
                 if (computed_norm - *stored_norm).abs() > 0.001 {
                     errors.push(format!(
                         "Vector {} (index {}) has norm {} but computed {}",
