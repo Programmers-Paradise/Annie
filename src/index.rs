@@ -586,7 +586,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err(
                 "ValidationError",
                 format!("{} issues found:\n{}", errors.len(), errors.join("\n"))
-            );
+            ));
         }
         Ok(())
     }
