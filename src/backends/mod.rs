@@ -54,25 +54,20 @@ impl AnnBackend for BackendEnum {
         match self {
             BackendEnum::Brute(b) => b.add(vector),
             BackendEnum::Hnsw(h)  => h.add(vector),
-            // FIX: Added the missing Gpu variant.
             BackendEnum::Gpu(g)   => g.add(vector),
         }
     }
-
     fn search(&self, query: &[f32], k: usize) -> Vec<(usize, f32)> {
         match self {
             BackendEnum::Brute(b) => b.search(query, k),
             BackendEnum::Hnsw(h)  => h.search(query, k),
-            // FIX: Added the missing Gpu variant.
             BackendEnum::Gpu(g)   => g.search(query, k),
         }
     }
-
     fn len(&self) -> usize {
         match self {
             BackendEnum::Brute(b) => b.len(),
             BackendEnum::Hnsw(h)  => h.len(),
-            // FIX: Added the missing Gpu variant.
             BackendEnum::Gpu(g)   => g.len(),
         }
     }
