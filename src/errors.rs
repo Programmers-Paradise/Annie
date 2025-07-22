@@ -63,7 +63,9 @@ impl fmt::Display for DistanceRegistryError {
 impl fmt::Display for BackendCreationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            write!(f, "Unsupported backend: '{}'.", name)
+            BackendCreationError::UnsupportedBackend(name) => {
+                write!(f, "Unsupported backend: '{}'.", name)
+            }
         }
     }
 }
