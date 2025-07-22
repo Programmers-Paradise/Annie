@@ -298,7 +298,7 @@ impl AnnIndex {
             return Ok(());
         }
         
-        let original_len = self.entries.len();
+        let _original_len = self.entries.len();
         self.entries.retain(|e| e.is_some());
         self.deleted_count = 0;
         
@@ -308,7 +308,7 @@ impl AnnIndex {
         // Clear filters after compaction
         self.boolean_filters.lock().unwrap().clear();
         
-        if let Some(metrics) = &self.metrics {
+        if let Some(_metrics) = &self.metrics {
         //    (**metrics).record_compaction(original_len, self.entries.len());
         }
         
@@ -644,7 +644,6 @@ impl AnnIndex {
         }
 
         // Use a min-heap to select top k efficiently
-        use std::collections::BinaryHeap;
         use std::cmp::Ordering;
         
         let k = k.min(candidates.len());

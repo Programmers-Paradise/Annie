@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use bincode;
@@ -86,7 +87,8 @@ impl HnswIndex {
         let mut info = HashMap::new();
         info.insert("type".to_string(), "hnsw".to_string());
         info.insert("dim".to_string(), self.dims.to_string());
-        info.insert("metric".to_string(), self.config.metric.clone());
+        // Currently only supports Euclidean distance
+        info.insert("metric".to_string(), "euclidean".to_string());
         info.insert("size".to_string(), self.user_ids.len().to_string());
         info.insert("max_elements".to_string(), self.config.max_elements.to_string());
         info.insert("m".to_string(), self.config.m.to_string());
@@ -104,7 +106,7 @@ impl HnswIndex {
     }
 
     /// Validate index integrity
-    pub fn validate(&self) -> PyResult<()> {
+    pub fn validate(&self) -> Result<(), RustAnnError> {
         let mut errors = Vec::new();
 
         // Check vector dimensions
@@ -127,7 +129,7 @@ impl HnswIndex {
         }
 
         if !errors.is_empty() {
-            return Err(RustAnnError::py_err(
+            return Err(RustAnnError::io_err(
                 "ValidationError",
                 format!("{} issues found:\n{}", errors.len(), errors.join("\n"))
             ));

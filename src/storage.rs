@@ -27,7 +27,7 @@ struct SerializedAnnIndex {
 ///
 /// Returns a Python IOError on failure.
 pub fn save_index(idx: &AnnIndex, path: &str) -> Result<(), RustAnnError> {
-    let serialized = SerializedAnnIndex {
+    let _serialized = SerializedAnnIndex {
         dim: idx.dim,
         metric: idx.metric.clone(),
         minkowski_p: idx.minkowski_p,
