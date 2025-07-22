@@ -2,6 +2,7 @@ use pyo3::prelude::*;
 use numpy::PyReadonlyArray1;
 use crate::index_enum::Index;
 use crate::metrics::Distance;
+use pyo3::types::PyDict;
 
 /// A unified Python-facing ANN Index supporting "brute" and "hnsw" backends.
 #[pyclass(name = "Index")]
@@ -43,8 +44,9 @@ impl PyIndex {
             Index::Hnsw(index) => index.get_info(),
         };
         let dict = PyDict::new(py);
-        for (k, v) in info {
-            dict.set_item(k, v)?;
+        for (key, value) in info {
+            // Directly use Rust strings without extra allocation
+            dict.set_item(key, value)?;
         }
         Ok(dict.into())
     }
