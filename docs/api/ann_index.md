@@ -321,6 +321,43 @@ Example:
 index.update_recall_estimate(10, 0.95)  # 95% recall for k=10
 ```
 
+### `get_info() -> dict`
+Retrieve information about the index.
+
+- Returns: dict: A dictionary containing details about the index such as type, dimension, metric, size, capacity, and memory usage.
+
+Example:
+```python
+info = index.get_info()
+print(info)
+# Output:
+# {
+#     'type': 'brute',
+#     'dim': '128',
+#     'metric': 'Euclidean',
+#     'size': '1000',
+#     'capacity': '1024',
+#     'deleted_count': '0',
+#     'max_deleted_ratio': '0.2',
+#     'version': '5',
+#     'memory_bytes': '524288'
+# }
+```
+
+### `validate() -> None`
+Validate the integrity of the index.
+
+- Raises: `RustAnnError`: If any integrity issues are found, such as duplicate IDs, incorrect vector dimensions, or mismatched norms.
+
+Example:
+```python
+try:
+    index.validate()
+    print("Index is valid.")
+except RustAnnError as e:
+    print(f"Validation error: {e}")
+```
+
 ## Example
 ```python
 import numpy as np
@@ -659,6 +696,8 @@ You’ll find:
 | get_metrics()                         | Retrieve current metrics                   |
 | update_recall_estimate(k, recall)     | Update recall estimate for a specific k    |
 | version()                             | Get the current version of the index       |
+| get_info()                            | Retrieve information about the index       |
+| validate()                            | Validate the integrity of the index        |
 
 ## Development & CI
 
