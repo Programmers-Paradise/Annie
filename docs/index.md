@@ -53,6 +53,8 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Fuzz Testing** for robustness and security
 - **Versioning** for concurrent access and consistency
 - **Handling of Deleted Entries** with auto-compaction
+- **Enhanced Index Information Retrieval** with `get_info` method
+- **Index Integrity Validation** with `validate` method
 
 ## Quick Start
 
@@ -287,6 +289,8 @@ You’ll find:
 | update_boolean_filter(name, bits)     | Update a boolean filter by name            | 
 | get_boolean_filter(name)              | Retrieve a boolean filter by name          | 
 | version()                             | Get current version of the index           |
+| get_info()                            | Retrieve detailed information about the index |
+| validate()                            | Validate the integrity of the index        |
 
 ### Utility Functions
 
