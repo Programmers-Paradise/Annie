@@ -1,12 +1,17 @@
 // src/errors.rs
 use std::fmt;
 use std::sync::PoisonError;
-use pyo3::exceptions::{PyException, PyIOError,PyRuntimeError};
+use pyo3::exceptions::{PyException, PyIOError,PyRuntimeError, PyValueError};
 use pyo3::PyErr;
 
 /// A simple error type for the ANN library, used to convert Rust errors into Python exceptions.
 #[derive(Debug)]
 pub struct RustAnnError(pub String);
+
+#[derive(Debug)]
+pub enum BackendCreationError {
+    UnsupportedBackend(String),
+}
 
 impl RustAnnError {
     /// Create a generic Python exception (`Exception`) with the error type and error message.
@@ -52,6 +57,24 @@ impl fmt::Display for DistanceRegistryError {
             Self::PythonConversionFailed(e) => write!(f, "Python value conversion failed: {}", e),
             Self::MetricNotFound(name) => write!(f, "Metric '{}' not found", name),
         }
+    }
+}
+
+impl fmt::Display for BackendCreationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BackendCreationError::UnsupportedBackend(name) => {
+                write!(f, "Unsupported backend: '{}'.", name)
+            }
+        }
+    }
+}
+
+impl std::error::Error for BackendCreationError {}
+
+impl From<BackendCreationError> for PyErr {
+    fn from(err: BackendCreationError) -> Self {
+        PyValueError::new_err(err.to_string())
     }
 }
 
