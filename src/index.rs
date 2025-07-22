@@ -522,6 +522,75 @@ impl AnnIndex {
         total > 0 && (self.deleted_count as f32 / total as f32) > self.max_deleted_ratio
     }
 
+    pub fn get_info(&self) -> HashMap<String, String> {
+        let mut info = HashMap::new();
+        info.insert("type".to_string(), "brute".to_string());
+        info.insert("dim".to_string(), self.dim.to_string());
+        
+        let metric = if let Some(p) = self.minkowski_p {
+            format!("Minkowski(p={})", p)
+        } else {
+            format!("{:?}", self.metric)
+        };
+        info.insert("metric".to_string(), metric);
+        
+        info.insert("size".to_string(), self.len().to_string());
+        info.insert("capacity".to_string(), self.capacity().to_string());
+        info.insert("deleted_count".to_string(), self.deleted_count.to_string());
+        info.insert("max_deleted_ratio".to_string(), self.max_deleted_ratio.to_string());
+        info.insert("version".to_string(), self.version().to_string());
+        
+        // Calculate memory usage
+        let entry_size = std::mem::size_of::<Option<(i64, Vec<f32>, f32)>>();
+        let entry_overhead = self.entries.capacity() * entry_size;
+        let vector_data = self.len() * self.dim * 4; // 4 bytes per f32
+        let norms = self.len() * 4; // 4 bytes per norm
+        let total_memory = entry_overhead + vector_data + norms;
+        info.insert("memory_bytes".to_string(), total_memory.to_string());
+        
+        info
+    }
+
+    /// Validate index integrity
+    pub fn validate(&self) -> PyResult<()> {
+        let mut seen_ids = HashSet::new();
+        let mut errors = Vec::new();
+
+        for (idx, entry) in self.entries.iter().enumerate() {
+            if let Some((id, vec, stored_norm)) = entry {
+                // Check ID uniqueness
+                if !seen_ids.insert(*id) {
+                    errors.push(format!("Duplicate ID found: {}", id));
+                }
+
+                // Check vector dimension
+                if vec.len() != self.dim {
+                    errors.push(format!(
+                        "Vector {} (index {}) has dimension {}, expected {}",
+                        id, idx, vec.len(), self.dim
+                    ));
+                }
+
+                // Check norm matches vector
+                let computed_norm = vec.iter().map(|x| x * x).sum::<f32>();
+                if (computed_norm - *stored_norm).abs() > 0.001 {
+                    errors.push(format!(
+                        "Vector {} (index {}) has norm {} but computed {}",
+                        id, idx, stored_norm, computed_norm
+                    ));
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(RustAnnError::py_err(
+                "ValidationError",
+                format!("{} issues found:\n{}", errors.len(), errors.join("\n"))
+            );
+        }
+        Ok(())
+    }
+
     fn inner_search(
         &self,
         q: &[f32],

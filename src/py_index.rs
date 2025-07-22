@@ -37,6 +37,26 @@ impl PyIndex {
         self.index.add_item(item);
     }
 
+    fn get_info(&self, py: Python) -> PyResult<PyObject> {
+        let info = match &self.index {
+            Index::BruteForce(index) => index.get_info(),
+            Index::Hnsw(index) => index.get_info(),
+        };
+        let dict = PyDict::new(py);
+        for (k, v) in info {
+            dict.set_item(k, v)?;
+        }
+        Ok(dict.into())
+    }
+
+    /// Validate index integrity
+    fn validate(&self) -> PyResult<()> {
+        match &self.index {
+            Index::BruteForce(index) => index.validate(),
+            Index::Hnsw(index) => index.validate(),
+        }
+    }
+
     fn build(&mut self) {
         self.index.build();
     }
