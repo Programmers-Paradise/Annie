@@ -40,8 +40,8 @@ impl PyIndex {
 
     fn get_info(&self, py: Python) -> PyResult<PyObject> {
         let info = match &self.index {
-            Index::BruteForce(index) => index.validate().map_err(|e| e.into()),
-            Index::Hnsw(index) => index.validate().map_err(|e| e.into_pyerr()),
+            Index::BruteForce(index) => index.get_info(),
+            Index::Hnsw(index) => index.get_info(),
         };
         let dict = PyDict::new(py);
         for (key, value) in info {
@@ -55,7 +55,7 @@ impl PyIndex {
     fn validate(&self) -> PyResult<()> {
         match &self.index {
             Index::BruteForce(index) => index.validate(),
-            Index::Hnsw(index) => index.validate(),
+            Index::Hnsw(index) => index.validate().map_err(|e| e.into_pyerr()),
         }
     }
 
