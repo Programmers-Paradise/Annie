@@ -129,10 +129,11 @@ impl HnswIndex {
         }
 
         if !errors.is_empty() {
-            return Err(RustAnnError::io_err(
-                "ValidationError",
-                format!("{} issues found:\n{}", errors.len(), errors.join("\n"))
-            ));
+            return Err(RustAnnError::io_err(format!(
+                "ValidationError: {} issues found:\n{}",
+                errors.len(),
+                errors.join("\n")
+            )));
         }
         Ok(())
     }
