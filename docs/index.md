@@ -53,6 +53,8 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Fuzz Testing** for robustness and security
 - **Versioning** for concurrent access and consistency
 - **Handling of Deleted Entries** with auto-compaction
+- **Enhanced Index Information Retrieval** with `get_info` method
+- **Index Integrity Validation** with `validate` method
 
 ## Quick Start
 
@@ -273,20 +275,22 @@ You’ll find:
 ### Key Methods
 
 | Method                                | Description                                | 
-| ------------------------------------- | ------------------------------------------ |
-| add(data, ids)	                      | Add vectors to index                       | 
-| add_batch_with_progress(data, ids, progress_callback) | Add vectors in batch with progress reporting |
-| remove(ids)                           | Remove vectors by IDs                      |
-| update(id, vector)                    | Update vector by ID                        |
-| compact()                             | Compact index by removing deleted entries  |
-| search(query, k, filter=None)         | Single query search with optional filter   | 
-| search_batch(queries, k, filter=None) | Batch query search with optional filter    | 
-| search_filter_py(query, k, filter_fn) | Filtered search with Python callback       | 
-| save(path)                            | Save index to disk                         | 
-| load(path)                            | Load index from disk                       | 
-| update_boolean_filter(name, bits)     | Update a boolean filter by name            | 
-| get_boolean_filter(name)              | Retrieve a boolean filter by name          | 
-| version()                             | Get current version of the index           |
+| ----------------------------------------------------- | --------------------------------------------- |
+| add(data, ids)	                                      | Add vectors to index                          | 
+| add_batch_with_progress(data, ids, progress_callback) | Add vectors in batch with progress reporting  |
+| remove(ids)                                           | Remove vectors by IDs                         |
+| update(id, vector)                                    | Update vector by ID                           |
+| compact()                                             | Compact index by removing deleted entries     |
+| search(query, k, filter=None)                         | Single query search with optional filter      | 
+| search_batch(queries, k, filter=None)                 | Batch query search with optional filter       | 
+| search_filter_py(query, k, filter_fn)                 | Filtered search with Python callback          | 
+| save(path)                                            | Save index to disk                            | 
+| load(path)                                            | Load index from disk                          | 
+| update_boolean_filter(name, bits)                     | Update a boolean filter by name               | 
+| get_boolean_filter(name)                              | Retrieve a boolean filter by name             | 
+| version()                                             | Get current version of the index              |
+| get_info()                                            | Retrieve detailed information about the index |
+| validate()                                            | Validate the integrity of the index           |
 
 ### Utility Functions
 

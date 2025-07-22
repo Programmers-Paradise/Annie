@@ -63,6 +63,16 @@ Load index from disk.
 - `path`: File path from which the index will be loaded.
 - Returns: A `PyHnswIndex` instance with the loaded data.
 
+### `get_info() -> dict`
+Retrieve information about the index, including type, dimensions, metric, size, and memory usage.
+
+- Returns: A dictionary containing index information.
+
+### `validate() -> None`
+Validate the integrity of the index, ensuring consistency in vector dimensions and ID mappings.
+
+- Raises: ValidationError if any issues are found.
+
 ## New Features
 
 ### `HnswConfig` and `PyHnswConfig`
@@ -73,6 +83,9 @@ The `validate` method in `HnswConfig` ensures that the configuration parameters 
 
 ### `user_ids` Field
 The `HnswIndex` struct now includes a `user_ids` field, which stores user-defined IDs for the vectors. This allows for more flexible identification and retrieval of vectors within the index.
+
+### `config` Field
+The `HnswIndex` struct now includes a `config` field, which stores the configuration settings used to create the index.
 
 ### `py_annindex` Macro
 The `py_annindex` macro is used to automatically generate Python bindings for the HNSW index. It simplifies the creation of Python classes from Rust structs, ensuring that the HNSW index can be easily used within Python environments.
@@ -419,6 +432,8 @@ Same API as `AnnIndex`, safe for concurrent use.
 | version()                             | Get the current version of the index       |
 | save(path)                            | Save index to disk                         | 
 | load(path)                            | Load index from disk                       | 
+| get_info()                            | Retrieve information about the index       |
+| validate()                            | Validate the integrity of the index        |
 
 ## Development & CI
 
