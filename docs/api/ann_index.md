@@ -420,7 +420,7 @@ neighbor_ids, _ = index.search(query, k=10)
 from rust_annie import BackendEnum, Distance
 
 # Create GPU index
-index = BackendEnum.new("gpu", 128, Distance.Euclidean())
+index = BackendEnum.new("gpu", 128, Distance.Euclidean()).expect("Failed to create GPU backend");
 
 # Add data
 data = np.random.rand(1000000, 128).astype(np.float32)
