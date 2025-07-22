@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use bit_vec::BitVec;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 use crate::backend::AnnBackend;
 use crate::storage::{save_index, load_index};
@@ -37,7 +38,7 @@ pub struct AnnIndex {
     #[serde(skip)]
     pub(crate) boolean_filters: Mutex<HashMap<String, BitVec>>,
     #[serde(skip)]
-    pub(crate) version: Arc<Mutex<u64>>,
+    pub(crate) version: Arc<AtomicU64>,
 }
 
 #[derive(PartialEq, Debug)]
@@ -84,7 +85,7 @@ impl AnnIndex {
             max_deleted_ratio: 0.2, // 20% deleted triggers compaction
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -106,7 +107,7 @@ impl AnnIndex {
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -126,7 +127,7 @@ impl AnnIndex {
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         })
     }
 
@@ -164,7 +165,9 @@ impl AnnIndex {
         }
 
         // Check for duplicate IDs
-        let existing_ids: HashSet<i64> = self.entries.iter()
+        let existing_ids: HashSet<i64> = self.entries
+            .par_iter()
+            .with_min_len(1000)
             .filter_map(|e| e.as_ref().map(|(id, _, _)| *id))
             .collect();
         let duplicates: Vec<_> = ids.iter()
@@ -207,7 +210,7 @@ impl AnnIndex {
         }
         
         // Increment version
-        *self.version.lock().unwrap() += 1;
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         // Invalidate boolean filters since entries changed
         self.boolean_filters.lock().unwrap().clear();
@@ -287,7 +290,7 @@ impl AnnIndex {
         }
         
         // Increment version
-        *self.version.lock().unwrap() += 1;
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         Ok(())
     }
@@ -298,17 +301,17 @@ impl AnnIndex {
             return Ok(());
         }
         
-        let original_len = self.entries.len();
+        let _original_len = self.entries.len();
         self.entries.retain(|e| e.is_some());
         self.deleted_count = 0;
         
         // Increment version
-        *self.version.lock().unwrap() += 1;
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         // Clear filters after compaction
         self.boolean_filters.lock().unwrap().clear();
         
-        if let Some(metrics) = &self.metrics {
+        if let Some(_metrics) = &self.metrics {
         //    (**metrics).record_compaction(original_len, self.entries.len());
         }
         
@@ -342,7 +345,7 @@ impl AnnIndex {
         let q_sq = q.iter().map(|x| x * x).sum::<f32>();
         let start = Instant::now();
         
-        let version = *self.version.lock().unwrap();
+        let version = self.version.load(AtomicOrdering::Relaxed);
 
         let (ids, dists) = py.allow_threads(|| {
             self.inner_search(q, q_sq, k, filter.as_ref(), version)
@@ -368,7 +371,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
-        let version = *self.version.lock().unwrap();
+        let version = self.version.load(AtomicOrdering::Relaxed);
         let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
@@ -421,7 +424,7 @@ impl AnnIndex {
     
     /// Current version
     pub fn version(&self) -> u64 {
-        *self.version.lock().unwrap()
+        self.version.load(AtomicOrdering::Relaxed)
     }
 
     /// Vector dimension.
@@ -522,6 +525,75 @@ impl AnnIndex {
         total > 0 && (self.deleted_count as f32 / total as f32) > self.max_deleted_ratio
     }
 
+    pub fn get_info(&self) -> HashMap<String, String> {
+        let mut info = HashMap::new();
+        info.insert("type".to_string(), "brute".to_string());
+        info.insert("dim".to_string(), self.dim.to_string());
+        
+        let metric = if let Some(p) = self.minkowski_p {
+            format!("Minkowski(p={})", p)
+        } else {
+            format!("{:?}", self.metric)
+        };
+        info.insert("metric".to_string(), metric);
+        
+        info.insert("size".to_string(), self.len().to_string());
+        info.insert("capacity".to_string(), self.capacity().to_string());
+        info.insert("deleted_count".to_string(), self.deleted_count.to_string());
+        info.insert("max_deleted_ratio".to_string(), self.max_deleted_ratio.to_string());
+        info.insert("version".to_string(), self.version().to_string());
+        
+        // Calculate memory usage
+        let entry_size = std::mem::size_of::<Option<(i64, Vec<f32>, f32)>>();
+        let entry_overhead = self.entries.capacity() * entry_size;
+        let vector_data = self.len() * self.dim * 4; // 4 bytes per f32
+        let norms = self.len() * 4; // 4 bytes per norm
+        let total_memory = entry_overhead + vector_data + norms;
+        info.insert("memory_bytes".to_string(), total_memory.to_string());
+        
+        info
+    }
+
+    /// Validate index integrity
+    pub fn validate(&self) -> PyResult<()> {
+        let mut seen_ids = HashSet::new();
+        let mut errors = Vec::new();
+
+        for (idx, entry) in self.entries.iter().enumerate() {
+            if let Some((id, vec, stored_norm)) = entry {
+                // Check ID uniqueness
+                if !seen_ids.insert(*id) {
+                    errors.push(format!("Duplicate ID found: {}", id));
+                }
+
+                // Check vector dimension
+                if vec.len() != self.dim {
+                    errors.push(format!(
+                        "Vector {} (index {}) has dimension {}, expected {}",
+                        id, idx, vec.len(), self.dim
+                    ));
+                }
+
+                // Check norm matches vector
+                let computed_norm = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
+                if (computed_norm - *stored_norm).abs() > 0.001 {
+                    errors.push(format!(
+                        "Vector {} (index {}) has norm {} but computed {}",
+                        id, idx, stored_norm, computed_norm
+                    ));
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(RustAnnError::py_err(
+                "ValidationError",
+                format!("{} issues found:\n{}", errors.len(), errors.join("\n"))
+            ));
+        }
+        Ok(())
+    }
+
     fn inner_search(
         &self,
         q: &[f32],
@@ -530,7 +602,7 @@ impl AnnIndex {
         filter: Option<&Filter>,
         version: u64,
     ) -> PyResult<(Vec<i64>, Vec<f32>)> {
-        if version != *self.version.lock().unwrap() {
+        if version != self.version.load(AtomicOrdering::Relaxed) {
             return Err(RustAnnError::py_err(
                 "ConcurrentModification", 
                 "Index modified during search operation"
@@ -575,7 +647,6 @@ impl AnnIndex {
         }
 
         // Use a min-heap to select top k efficiently
-        use std::collections::BinaryHeap;
         use std::cmp::Ordering;
         
         let k = k.min(candidates.len());
@@ -640,7 +711,7 @@ impl AnnBackend for AnnIndex {
             max_deleted_ratio: 0.2,
             metrics: None,
             boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(Mutex::new(0)),
+            version: Arc::new(AtomicU64::new(0)),
         }
     }
     

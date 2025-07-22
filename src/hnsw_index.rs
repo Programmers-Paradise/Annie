@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use bincode;
@@ -45,11 +46,12 @@ impl HnswConfig {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct HnswIndexData {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HnswIndexData {
     dims: usize,
     user_ids: Vec<i64>,
     vectors: Vec<Vec<f32>>,
+    config: HnswConfig,
 }
 
 pub struct HnswIndex {
@@ -57,6 +59,7 @@ pub struct HnswIndex {
     dims: usize,
     user_ids: Vec<i64>,
     vectors: Vec<Vec<f32>>, // Added field
+    config: HnswConfig,
 }
 
 impl HnswIndex {
@@ -76,7 +79,63 @@ impl HnswIndex {
             dims,
             user_ids: Vec::new(),
             vectors: Vec::new(),
+            config,
         })
+    }
+
+    pub fn get_info(&self) -> HashMap<String, String> {
+        let mut info = HashMap::new();
+        info.insert("type".to_string(), "hnsw".to_string());
+        info.insert("dim".to_string(), self.dims.to_string());
+        // Currently only supports Euclidean distance
+        info.insert("metric".to_string(), "euclidean".to_string());
+        info.insert("size".to_string(), self.user_ids.len().to_string());
+        info.insert("max_elements".to_string(), self.config.max_elements.to_string());
+        info.insert("m".to_string(), self.config.m.to_string());
+        info.insert("ef_construction".to_string(), self.config.ef_construction.to_string());
+        info.insert("ef_search".to_string(), self.config.ef_search.to_string());
+        
+        // Calculate memory usage
+        let ids_mem = self.user_ids.capacity() * std::mem::size_of::<i64>();
+        let vec_meta_mem = self.vectors.capacity() * std::mem::size_of::<Vec<f32>>();
+        let vec_data_mem = self.vectors.iter().map(|v| v.capacity() * 4).sum::<usize>();
+        let total_memory = ids_mem + vec_meta_mem + vec_data_mem;
+        info.insert("memory_bytes".to_string(), total_memory.to_string());
+        
+        info
+    }
+
+    /// Validate index integrity
+    pub fn validate(&self) -> Result<(), RustAnnError> {
+        let mut errors = Vec::new();
+
+        // Check vector dimensions
+        for (i, vec) in self.vectors.iter().enumerate() {
+            if vec.len() != self.dims {
+                errors.push(format!(
+                    "Vector {} has dimension {}, expected {}",
+                    i, vec.len(), self.dims
+                ));
+            }
+        }
+
+        // Check ID mapping consistency
+        if self.user_ids.len() != self.vectors.len() {
+            errors.push(format!(
+                "ID/vector count mismatch: {} IDs vs {} vectors",
+                self.user_ids.len(),
+                self.vectors.len()
+            ));
+        }
+
+        if !errors.is_empty() {
+            return Err(RustAnnError::io_err(format!(
+                "ValidationError: {} issues found:\n{}",
+                errors.len(),
+                errors.join("\n")
+            )));
+        }
+        Ok(())
     }
 
     pub fn insert(&mut self, item: &[f32], user_id: i64) {
@@ -128,6 +187,7 @@ impl AnnBackend for HnswIndex {
             dims: self.dims,
             user_ids: self.user_ids.clone(),
             vectors: self.vectors.clone(),
+            config: self.config.clone(),
         };
 
         let file = File::create(&safe_path).expect("Failed to create file");
@@ -159,6 +219,7 @@ impl AnnBackend for HnswIndex {
             dims: data.dims,
             user_ids: data.user_ids,
             vectors: data.vectors,
+            config: data.config,
         }
     }
 }

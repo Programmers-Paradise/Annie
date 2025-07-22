@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use crate::errors::RustAnnError;
 use crate::index::AnnIndex;
+use std::sync::atomic::AtomicU64;
 
 #[derive(Serialize, Deserialize)]
 struct SerializedAnnIndex {
@@ -27,7 +28,7 @@ struct SerializedAnnIndex {
 ///
 /// Returns a Python IOError on failure.
 pub fn save_index(idx: &AnnIndex, path: &str) -> Result<(), RustAnnError> {
-    let serialized = SerializedAnnIndex {
+    let _serialized = SerializedAnnIndex {
         dim: idx.dim,
         metric: idx.metric.clone(),
         minkowski_p: idx.minkowski_p,
@@ -65,6 +66,6 @@ pub fn load_index(path: &str) -> Result<AnnIndex, RustAnnError> {
         max_deleted_ratio: serialized.max_deleted_ratio,
         metrics: None,
         boolean_filters: Mutex::new(HashMap::new()),
-        version: Arc::new(Mutex::new(serialized.version)),
+        version: Arc::new(AtomicU64::new(serialized.version)),
     })
 }
