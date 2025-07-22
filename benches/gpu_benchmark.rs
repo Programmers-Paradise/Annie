@@ -7,6 +7,7 @@ use rand::prelude::*;
 
 fn bench_gpu_search(c: &mut Criterion) {
     let mut backend = BackendEnum::new("gpu", 128, Distance::Euclidean);
+        .expect("Failed to create GPU backend for benchmark");
     
     // Add 1M random vectors
     let mut rng = rand::thread_rng();

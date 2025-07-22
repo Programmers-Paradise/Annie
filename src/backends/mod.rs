@@ -8,6 +8,7 @@ use ann_backend::AnnBackend;
 use brute::BruteForceIndex;
 use hnsw::HnswIndex;
 use gpu::GpuIndex;
+use crate::errors::BackendCreationError;
 
 /// Enum to wrap the different backends under a single type.
 pub enum BackendEnum {
@@ -18,11 +19,12 @@ pub enum BackendEnum {
 
 impl BackendEnum {
     /// Create a new backend by type name.
-    pub fn new(backend_type: &str, dims: usize, distance: Distance) -> Self {
-        match backend_type {
-            "hnsw" => Self::Hnsw(HnswIndex::new(dims, distance)),
-            "gpu" => Self::Gpu(GpuIndex::new(dims, distance)),
-            _      => Self::Brute(BruteForceIndex::new(distance)),
+    pub fn new(backend_type: &str, dims: usize, distance: Distance) -> Result<Self, BackendCreationError> {
+        match backend_type.to_lowercase().as_str() {
+            "hnsw" => Ok(Self::Hnsw(HnswIndex::new(dims, distance))),
+            "gpu" => Ok(Self::Gpu(GpuIndex::new(dims, distance))),
+            "brute" | "bruteforce" => Ok(Self::Brute(BruteForceIndex::new(distance))),
+            _      => Err(BackendCreationError::UnsupportedBackend(backend_type.to_string())),
         }
     }
 }
