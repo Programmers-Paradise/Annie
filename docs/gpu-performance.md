@@ -77,6 +77,54 @@ fn test_gpu_error_conditions() {
 }
 ```
 
+## HIP Kernel Compilation
+
+For systems using the ROCm platform, HIP kernel compilation is handled with enhanced environment validation and error handling. Ensure that `hipcc` is available in your `PATH` and that the kernel source file exists.
+
+### Example
+```rust
+#[cfg(feature = "rocm")]
+fn compile_hip_kernel() {
+    use std::env;
+    use std::path::PathBuf;
+    // Validate and sanitize build environment
+    let hipcc_path = match which::which("hipcc") {
+        Ok(path) => path,
+        Err(_) => {
+            eprintln!("hipcc not found in PATH. Aborting HIP kernel build.");
+            return;
+        }
+    };
+    let kernel_src = PathBuf::from("kernels/l2_kernel.hip");
+    let kernel_out = PathBuf::from("kernels/l2_kernel.hsaco");
+    if !kernel_src.exists() {
+        eprintln!("Kernel source {:?} does not exist.", kernel_src);
+        return;
+    }
+    // Only allow known safe arguments
+    let args = ["--genco", "-o", kernel_out.to_str().unwrap(), kernel_src.to_str().unwrap()];
+    let status = Command::new(hipcc_path)
+        .args(&args)
+        .env_clear()
+        .envs(env::vars().filter(|(k,_)| k == "PATH" || k == "HOME"))
+        .status();
+    let status = match status {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to execute hipcc: {}", e);
+            return;
+        }
+    };
+    
+    if !status.success() {
+        eprintln!("HIP kernel compilation failed with exit code: {:?}", status.code());
+        return;
+    }
+    
+    println!("cargo:rerun-if-changed=kernels/l2_kernel.hip");
+}
+```
+
 ## Benchmark Results
 
 Command: `cargo bench --features cuda`
@@ -86,4 +134,4 @@ Typical results on V100:
 - FP16: 9ms @ 1M vectors
 - INT8: 6ms @ 1M vectors (with quantization)
 
-This updated documentation reflects the changes in the GPU backend creation process, highlighting the new error handling mechanism and providing guidance on how to handle potential errors effectively. Additionally, it includes information on GPU error conditions to help users avoid common pitfalls when using GPU features.
+This updated documentation reflects the changes in the GPU backend creation process, highlighting the new error handling mechanism and providing guidance on how to handle potential errors effectively. Additionally, it includes information on GPU error conditions and HIP kernel compilation to help users avoid common pitfalls when using GPU features.
