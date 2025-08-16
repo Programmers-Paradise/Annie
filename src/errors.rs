@@ -1,15 +1,39 @@
 // src/errors.rs
-use std::fmt;
 use std::sync::PoisonError;
-use pyo3::exceptions::{PyException, PyIOError,PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyException, PyIOError, PyRuntimeError, PyValueError};
 use pyo3::PyErr;
+use thiserror::Error;
 
-/// A simple error type for the ANN library, used to convert Rust errors into Python exceptions.
-#[derive(Debug)]
-pub struct RustAnnError(pub String);
+/// A standardized error type for the ANN library, with context and chaining.
+#[derive(Debug, Error)]
+pub enum RustAnnError {
+    #[error("Lock poisoned")]
+    LockPoisoned,
+    #[error("{0}")]
+    Message(String),
+    #[error("I/O error: {0}")]
+    Io(String),
+    #[error("Callback error: {0}")]
+    Callback(String),
+    #[error("Duplicate IDs: {0}")]
+    DuplicateIds(String),
+    #[error("Dimension error: {0}")]
+    Dimension(String),
+    #[error("Allocation error: {0}")]
+    Allocation(String),
+    #[error("Empty index")]
+    EmptyIndex,
+    #[error("Reshape error: {0}")]
+    Reshape(String),
+    #[error("Minkowski error: {0}")]
+    Minkowski(String),
+    #[error("Other error: {0}")]
+    Other(String),
+}
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum BackendCreationError {
+    #[error("Unsupported backend: '{0}'.")]
     UnsupportedBackend(String),
 }
 
@@ -21,56 +45,42 @@ impl RustAnnError {
         let msg = format!("RustAnnError [{}]: {}", safe_type, safe_detail);
         PyException::new_err(msg)
     }
-
-    /// Create a RustAnnError wrapping an I/O error message.
-    /// This is used internally in save/load to signal I/O or serialization failures.
     pub fn io_err(msg: impl Into<String>) -> RustAnnError {
-        RustAnnError(msg.into())
+        RustAnnError::Io(msg.into())
     }
-
-    /// Convert this RustAnnError into a Python `IOError` (`OSError`) exception.
     pub fn into_pyerr(self) -> PyErr {
-        PyIOError::new_err(self.0)
+        match self {
+            RustAnnError::Io(msg) => PyIOError::new_err(msg),
+            RustAnnError::Callback(msg) => PyRuntimeError::new_err(msg),
+            RustAnnError::DuplicateIds(msg) => PyValueError::new_err(msg),
+            RustAnnError::Dimension(msg) => PyValueError::new_err(msg),
+            RustAnnError::Allocation(msg) => PyRuntimeError::new_err(msg),
+            RustAnnError::EmptyIndex => PyValueError::new_err("Index is empty"),
+            RustAnnError::Reshape(msg) => PyValueError::new_err(msg),
+            RustAnnError::Minkowski(msg) => PyValueError::new_err(msg),
+            RustAnnError::Message(msg) => PyRuntimeError::new_err(msg),
+            RustAnnError::Other(msg) => PyRuntimeError::new_err(msg),
+            RustAnnError::LockPoisoned => PyRuntimeError::new_err("Lock poisoned"),
+        }
     }
 }
 
-impl fmt::Display for RustAnnError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
+// Display is derived by thiserror
 
+#[derive(Debug, Error)]
 pub enum DistanceRegistryError {
+    #[error("Global lock poisoned")]
     LockPoisoned,
+    #[error("Distance registry not initialized")]
     RegistryNotInitialized,
+    #[error("Python call failed: {0}")]
     PythonCallFailed(String),
+    #[error("Python value conversion failed: {0}")]
     PythonConversionFailed(String),
+    #[error("Metric '{0}' not found")]
     MetricNotFound(String),
 }
 
-impl fmt::Display for DistanceRegistryError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::LockPoisoned => write!(f, "Global lock poisoned"),
-            Self::RegistryNotInitialized => write!(f, "Distance registry not initialized"),
-            Self::PythonCallFailed(e) => write!(f, "Python call failed: {}", e),
-            Self::PythonConversionFailed(e) => write!(f, "Python value conversion failed: {}", e),
-            Self::MetricNotFound(name) => write!(f, "Metric '{}' not found", name),
-        }
-    }
-}
-
-impl fmt::Display for BackendCreationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BackendCreationError::UnsupportedBackend(name) => {
-                write!(f, "Unsupported backend: '{}'.", name)
-            }
-        }
-    }
-}
-
-impl std::error::Error for BackendCreationError {}
 
 impl From<BackendCreationError> for PyErr {
     fn from(err: BackendCreationError) -> Self {
@@ -86,7 +96,7 @@ impl From<DistanceRegistryError> for PyErr {
 
 impl From<RustAnnError> for PyErr {
     fn from(err: RustAnnError) -> Self {
-        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(err.0)
+        PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(err.to_string())
     }
 }
 

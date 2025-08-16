@@ -124,7 +124,11 @@ impl Distance {
             Distance::Jaccard()    => jaccard(a, b),
             Distance::Angular()    => angular(a, b),
             Distance::Canberra()   => canberra(a, b),
-            Distance::Custom(_)    => panic!("Custom metrics should be handled separately"),
+            Distance::Custom(_)    => {
+                // Return a default value or propagate error
+                // Here, return NaN to indicate unsupported metric
+                std::f32::NAN
+            }
         }
     }
 }

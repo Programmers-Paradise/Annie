@@ -1262,6 +1262,7 @@ dependencies = [
  "rayon",
  "rust_annie_macros",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
