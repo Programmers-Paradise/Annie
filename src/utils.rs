@@ -103,6 +103,9 @@ pub fn validate_path(path: &str) -> Result<String, &'static str> {
 }
 
 fn dot(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "dot: input slices must have the same length");
+    if a.len() != b.len() {
+        // Return 0.0 or log error, but do not panic
+        return 0.0;
+    }
     a.iter().zip(b).map(|(x, y)| x * y).sum()
 }

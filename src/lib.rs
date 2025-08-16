@@ -54,10 +54,10 @@ impl PyHnswConfig {
     ) -> Self {
         let default = HnswConfig::default();
         PyHnswConfig {
-            m: m.unwrap_or(default.m),
-            ef_construction: ef_construction.unwrap_or(default.ef_construction),
-            ef_search: ef_search.unwrap_or(default.ef_search),
-            max_elements: max_elements.unwrap_or(default.max_elements),
+            m: m.unwrap_or_else(|| default.m),
+            ef_construction: ef_construction.unwrap_or_else(|| default.ef_construction),
+            ef_search: ef_search.unwrap_or_else(|| default.ef_search),
+            max_elements: max_elements.unwrap_or_else(|| default.max_elements),
         }
     }
 
