@@ -236,7 +236,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
         }
         let to_remove: HashSet<i64> = ids.into_iter().collect();
-        let mut removed_count = 0;
+        let mut removed_count: usize = 0;
         for entry in &mut self.entries {
             if let Some((id, _, _)) = entry {
                 if to_remove.contains(id) {

@@ -51,7 +51,7 @@ pub struct HnswIndexData {
     dims: usize,
     user_ids: Vec<i64>,
     vectors: Vec<Vec<f32>>,
-    config: HnswConfig,
+    pub config: HnswConfig,
 }
 
 pub struct HnswIndex {
@@ -59,7 +59,7 @@ pub struct HnswIndex {
     dims: usize,
     user_ids: Vec<i64>,
     vectors: Vec<Vec<f32>>, // Added field
-    config: HnswConfig,
+        pub config: HnswConfig,
 }
 
 impl HnswIndex {
