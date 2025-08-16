@@ -13,8 +13,14 @@ fn compile_hip_kernel() {
             "-o", "kernels/l2_kernel.hsaco",
             "kernels/l2_kernel.hip"
         ])
-        .status()
-        .expect("Failed to compile HIP kernel");
+        .status();
+    let status = match status {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to compile HIP kernel: {}", e);
+            return;
+        }
+    };
     
     if !status.success() {
         panic!("HIP kernel compilation failed");

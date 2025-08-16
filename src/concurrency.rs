@@ -61,8 +61,14 @@ impl ThreadSafeAnnIndex {
     }
     
     pub fn version(&self, _py: Python) -> u64 {
-        let guard = self.inner.read().unwrap();
-        guard.version()
+        match self.inner.read() {
+            Ok(guard) => guard.version(),
+            Err(_) => {
+                // Return a sentinel value or propagate error as needed
+                // Here, returning 0 to indicate error
+                0
+            }
+        }
     }
 
     /// Single-vector k-NN search.

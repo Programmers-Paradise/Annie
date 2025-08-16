@@ -41,40 +41,18 @@ pub struct AnnIndex {
     pub(crate) version: Arc<AtomicU64>,
 }
 
-#[derive(PartialEq, Debug)]
-struct FloatOrd(f32);
-
-impl Eq for FloatOrd {}
-
-impl Ord for FloatOrd {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.partial_cmp(&other.0).unwrap_or_else(|| {
-            if self.0.is_nan() && other.0.is_nan() {
-                std::cmp::Ordering::Equal
-            } else if self.0.is_nan() {
-                std::cmp::Ordering::Greater
-            } else if other.0.is_nan() {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        })
-    }
-}
-
-impl PartialOrd for FloatOrd {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
 
 #[pymethods]
 impl AnnIndex {
     #[new]
     /// Create a new index for unit-variant metrics.
     pub fn new(dim: usize, metric: Distance) -> PyResult<Self> {
+        const MAX_DIM: usize = 4096;
         if dim == 0 {
             return Err(RustAnnError::py_err("Invalid Dimension", "Dimension must be > 0"));
+        }
+        if dim > MAX_DIM {
+            return Err(RustAnnError::py_err("Excessive Dimension", format!("Dimension {} exceeds safe limit {}", dim, MAX_DIM)));
         }
         Ok(AnnIndex {
             dim,
@@ -140,7 +118,7 @@ impl AnnIndex {
     /// The callback should be a callable that takes two integers: (current, total)
     pub fn add_batch_with_progress(
         &mut self,
-        py: Python,
+    _py: Python,
         data: PyReadonlyArray2<f32>,
         ids: PyReadonlyArray1<i64>,
         progress_callback: PyObject
@@ -157,11 +135,19 @@ impl AnnIndex {
         let view = data.as_array();
         let ids = ids.as_slice()?;
         let n = view.nrows();
+        const MAX_ROWS: usize = 1_000_000;
         if n != ids.len() {
             return Err(RustAnnError::py_err("Input Mismatch", "`data` and `ids` must have same length"));
         }
         if view.ncols() != self.dim {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, view.ncols())));
+        }
+        if n > MAX_ROWS {
+            return Err(RustAnnError::py_err("Excessive Allocation", format!("Attempted to add {} vectors, limit is {}", n, MAX_ROWS)));
+        }
+        let active_entries = self.entries.iter().filter(|e| e.is_some()).count();
+        if active_entries + n >= MAX_ROWS {
+            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would reach or exceed safe limit {}", MAX_ROWS)));
         }
 
         // Check for duplicate IDs
@@ -213,7 +199,9 @@ impl AnnIndex {
         self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         // Invalidate boolean filters since entries changed
-        self.boolean_filters.lock().unwrap().clear();
+        self.boolean_filters.lock()
+            .map_err(|_| RustAnnError::LockPoisoned)?
+            .clear();
         
         if let Some(metrics) = &self.metrics {
             let metric_name = match &self.metric {
@@ -309,7 +297,9 @@ impl AnnIndex {
         self.version.fetch_add(1, AtomicOrdering::Relaxed);
         
         // Clear filters after compaction
-        self.boolean_filters.lock().unwrap().clear();
+        self.boolean_filters.lock()
+            .map_err(|_| RustAnnError::LockPoisoned)?
+            .clear();
         
         if let Some(_metrics) = &self.metrics {
         //    (**metrics).record_compaction(original_len, self.entries.len());
@@ -656,18 +646,7 @@ impl AnnIndex {
         
         let mut candidates = candidates;
         let (left, mid, _) = candidates.select_nth_unstable_by(k - 1, |a, b| {
-            a.1.partial_cmp(&b.1).unwrap_or_else(|| {
-                // Handle NaN values consistently
-                if a.1.is_nan() && b.1.is_nan() {
-                    Ordering::Equal
-                } else if a.1.is_nan() {
-                    Ordering::Greater
-                } else if b.1.is_nan() {
-                    Ordering::Less
-                } else {
-                    Ordering::Equal
-                }
-            })
+            safe_partial_cmp(&a.1, &b.1)
         });
 
         // Collect and sort only the top-k candidates
@@ -740,4 +719,18 @@ impl AnnBackend for AnnIndex {
     fn load(path: &str) -> Self { 
         load_index(path).unwrap() 
     }
+}
+
+fn safe_partial_cmp(a: &f32, b: &f32) -> std::cmp::Ordering {
+    a.partial_cmp(b).unwrap_or_else(|| {
+        if a.is_nan() && b.is_nan() {
+            std::cmp::Ordering::Equal
+        } else if a.is_nan() {
+            std::cmp::Ordering::Greater
+        } else if b.is_nan() {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    })
 }
