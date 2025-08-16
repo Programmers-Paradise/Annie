@@ -73,8 +73,12 @@ impl AnnIndex {
     #[new]
     /// Create a new index for unit-variant metrics.
     pub fn new(dim: usize, metric: Distance) -> PyResult<Self> {
+        const MAX_DIM: usize = 4096;
         if dim == 0 {
             return Err(RustAnnError::py_err("Invalid Dimension", "Dimension must be > 0"));
+        }
+        if dim > MAX_DIM {
+            return Err(RustAnnError::py_err("Excessive Dimension", format!("Dimension {} exceeds safe limit {}", dim, MAX_DIM)));
         }
         Ok(AnnIndex {
             dim,
@@ -157,11 +161,19 @@ impl AnnIndex {
         let view = data.as_array();
         let ids = ids.as_slice()?;
         let n = view.nrows();
+        const MAX_ROWS: usize = 1_000_000;
         if n != ids.len() {
             return Err(RustAnnError::py_err("Input Mismatch", "`data` and `ids` must have same length"));
         }
         if view.ncols() != self.dim {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, view.ncols())));
+        }
+        if n > MAX_ROWS {
+            return Err(RustAnnError::py_err("Excessive Allocation", format!("Attempted to add {} vectors, limit is {}", n, MAX_ROWS)));
+        }
+        let active_entries = self.entries.iter().filter(|e| e.is_some()).count();
+        if active_entries + n >= MAX_ROWS {
+            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would reach or exceed safe limit {}", MAX_ROWS)));
         }
 
         // Check for duplicate IDs
