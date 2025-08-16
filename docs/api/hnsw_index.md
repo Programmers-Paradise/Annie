@@ -18,6 +18,7 @@ Add vectors to the index.
 
 - `data`: N×dims array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
+- **Validation**: IDs must be non-negative.
 
 ### `add_batch(data: ndarray, ids: ndarray, progress_callback: Optional[Callable[[int, int], None]] = None)`
 Add vectors to the index in batches, with optional progress reporting.
@@ -25,24 +26,28 @@ Add vectors to the index in batches, with optional progress reporting.
 - `data`: N×dims array of float32 vectors
 - `ids`: N-dimensional array of int64 IDs
 - `progress_callback`: Optional callable that takes two integers (current, total) to report progress.
+- **Validation**: IDs must be non-negative.
 
 ### `search(vector: ndarray, k: int) -> ndarray`
 Search for k approximate nearest neighbors.
 
 - `vector`: dims-dimensional query vector
 - `k`: Number of neighbors to return
+- **Validation**: The dimension of the query vector must match the index's dimension. `k` must be between 1 and the maximum number of elements.
 - Returns: Neighbor IDs
 
 ### `remove(id: int)`
 Remove a vector from the index by its ID.
 
 - `id`: ID of the vector to remove
+- **Validation**: ID must be non-negative.
 
 ### `update(id: int, vector: ndarray)`
 Update a vector in the index.
 
 - `id`: ID of the vector to update
 - `vector`: New vector data
+- **Validation**: ID must be non-negative. The dimension of the vector must match the index's dimension.
 
 ### `compact()`
 Compact the index by removing deleted entries.
