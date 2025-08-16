@@ -58,7 +58,7 @@ Add a batch of vectors with their corresponding IDs to the index.
 
 - `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
 - `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
-- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, or if the number of vectors exceeds the maximum allowed (1,000,000).
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, if IDs are negative, or if the number of vectors exceeds the maximum allowed (1,000,000).
 
 Example:
 ```python
@@ -74,7 +74,7 @@ Add a batch of vectors with their corresponding IDs to the index with progress r
 - `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
 - `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
 - `progress_callback` (Callable[[int, int], None]): A callback function that takes two integers: the current number of processed vectors and the total number of vectors.
-- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, or if the number of vectors exceeds the maximum allowed (1,000,000).
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, if IDs are negative, or if the number of vectors exceeds the maximum allowed (1,000,000).
 
 Example:
 ```python
@@ -94,12 +94,13 @@ Internal method to add a batch of vectors with their corresponding IDs to the in
 - `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
 - `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
 - `progress_callback` (Optional[Callable[[int, int], None]]): A callback function that takes two integers: the current number of processed vectors and the total number of vectors. If None, no progress is reported.
-- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, or if the number of vectors exceeds the maximum allowed (1,000,000).
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, if IDs are negative, or if the number of vectors exceeds the maximum allowed (1,000,000).
 
 ### `remove(ids: List[int])`
 Remove entries from the index by their IDs.
 
 - `ids` (List[int]): List of IDs to remove from the index. IDs that don't exist in the index are ignored.
+- Raises: `RustAnnError`: If any ID is negative.
 
 Example:
 ```python
@@ -112,7 +113,7 @@ Update an existing vector in the index by its ID.
 
 - `id` (int): ID of the vector to update.
 - `vector` (numpy.ndarray): New vector data. Must match the index dimension.
-- Raises: `RustAnnError`: If the vector dimension is incorrect or if the ID is not found.
+- Raises: `RustAnnError`: If the vector dimension is incorrect, if the ID is not found, or if the ID is negative.
 
 Example:
 ```python
@@ -144,12 +145,12 @@ print(f"Index version: {current_version}")
 Search for the k nearest neighbors of a query vector with an optional filter.
 
 - `query` (numpy.ndarray): Query vector with dimension matching the index. Should be a 1D array of float32 values.
-- `k` (int): Number of nearest neighbors to return. Must be positive.
+- `k` (int): Number of nearest neighbors to return. Must be positive and not exceed the maximum elements in the index.
 - `filter` (Optional[Filter]): An optional filter to apply during the search.
 - Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
   - neighbor_ids: Array of k nearest neighbor IDs (int64)
   - distances: Array of k corresponding distances (float32)
-- Raises: `RustAnnError`: If query dimension doesn't match index dimension, if the index is empty, or if the index is modified during the search.
+- Raises: `RustAnnError`: If query dimension doesn't match index dimension, if the index is empty, if the index is modified during the search, or if k is invalid.
 
 Example:
 ```python
@@ -168,7 +169,7 @@ Batch search for k nearest neighbors for multiple query vectors with an optional
 - Returns: Tuple[numpy.ndarray, numpy.ndarray]: A tuple containing:
   - neighbor_ids: N x k array of neighbor IDs for each query (int64)
   - distances: N x k array of distances for each query (float32)
-- Raises: `RustAnnError`: If query dimensions don't match index dimension, if parallel processing fails, or if the index is modified during the search.
+- Raises: `RustAnnError`: If query dimensions don't match index dimension, if parallel processing fails, if the index is modified during the search, or if k is invalid.
 
 Example:
 ```python
