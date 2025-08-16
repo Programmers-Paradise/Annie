@@ -258,7 +258,10 @@ impl DistanceFunction for PythonDistanceFunction {
             };
 
             match self.python_func.call1(py, (a_py, b_py)) {
-                Ok(result) => result.extract::<f32>(py).unwrap_or(f32::MAX),
+                Ok(result) => match result.extract::<f32>(py) {
+                    Ok(val) => val,
+                    Err(_) => f32::MAX,
+                },
                 Err(_) => f32::MAX,
             }
         })

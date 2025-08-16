@@ -111,6 +111,11 @@ impl AnnIndex {
 
     /// Add vectors and IDs in batch.
     pub fn add(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>) -> PyResult<()> {
+        // Validate IDs: no negative values
+        let ids_slice = ids.as_slice()?;
+        if ids_slice.iter().any(|&id| id < 0) {
+            return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
+        }
         self.add_batch_internal(data, ids, None)
     }
 
@@ -226,21 +231,21 @@ impl AnnIndex {
         if ids.is_empty() {
             return Ok(());
         }
-        
+        // Validate IDs: no negative values
+        if ids.iter().any(|&id| id < 0) {
+            return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
+        }
         let to_remove: HashSet<i64> = ids.into_iter().collect();
-        let mut removed_count = 0;
-        
+        let mut removed_count: usize = 0;
         for entry in &mut self.entries {
             if let Some((id, _, _)) = entry {
                 if to_remove.contains(id) {
                     *entry = None;
-                    removed_count += 1;
+                    removed_count = removed_count.checked_add(1).ok_or_else(|| RustAnnError::py_err("Overflow", "Deleted count overflow"))?;
                 }
             }
         }
-        
-        self.deleted_count += removed_count;
-        
+        self.deleted_count = self.deleted_count.checked_add(removed_count).ok_or_else(|| RustAnnError::py_err("Overflow", "Deleted count overflow"))?;
         // Always compact if deleted_count is large, or provide a manual compact option for users to reclaim memory immediately.
         if self.should_compact() || self.deleted_count > 100_000 {
             self.compact()?;
@@ -249,16 +254,17 @@ impl AnnIndex {
     }
 
     pub fn update(&mut self, id: i64, vector: Vec<f32>) -> PyResult<()> {
+        if id < 0 {
+            return Err(RustAnnError::py_err("Invalid ID", "ID must be non-negative"));
+        }
         if vector.len() != self.dim {
             return Err(RustAnnError::py_err(
                 "Dimension Error", 
                 format!("Expected dimension {}, got {}", self.dim, vector.len())
             ));
         }
-        
         let mut found = false;
         let sq_norm = vector.iter().map(|x| x * x).sum::<f32>();
-        
         for entry in &mut self.entries {
             if let Some((entry_id, ref mut vec, ref mut norm)) = entry {
                 if *entry_id == id {
@@ -269,17 +275,14 @@ impl AnnIndex {
                 }
             }
         }
-        
         if !found {
             return Err(RustAnnError::py_err(
                 "ID Not Found", 
                 format!("ID {} not found in index", id)
             ));
         }
-        
         // Increment version
         self.version.fetch_add(1, AtomicOrdering::Relaxed);
-        
         Ok(())
     }
 

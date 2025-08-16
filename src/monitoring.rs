@@ -69,9 +69,10 @@ impl MetricsCollector {
             0.0
         };
 
-        let distance_metric = self.distance_metric.read()
-            .map(|metric| metric.clone())
-            .unwrap_or_else(|_| "unknown".to_string());
+        let distance_metric = match self.distance_metric.read() {
+            Ok(metric) => metric.clone(),
+            Err(_) => "unknown".to_string(),
+        };
 
         MetricsSnapshot {
             query_count,
@@ -101,9 +102,10 @@ impl MetricsCollector {
 
         let index_size = self.index_size.load(Ordering::Relaxed);
         let dimensions = self.dimensions.load(Ordering::Relaxed);
-        let distance_metric = self.distance_metric.read()
-            .map(|metric| metric.clone())
-            .unwrap_or_else(|_| "unknown".to_string());
+        let distance_metric = match self.distance_metric.read() {
+            Ok(metric) => metric.clone(),
+            Err(_) => "unknown".to_string(),
+        };
         let uptime_seconds = self.start_time.elapsed().as_secs();
 
         let mut output = String::new();
@@ -259,9 +261,10 @@ impl PyMetricsCollector {
         dict.set_item("dimensions", metrics.dimensions.load(Ordering::Relaxed))?;
         dict.set_item("uptime_seconds", metrics.start_time.elapsed().as_secs())?;
         
-        let distance_metric = metrics.distance_metric.read()
-            .map(|metric| metric.clone())
-            .unwrap_or_else(|_| "unknown".to_string());
+        let distance_metric = match metrics.distance_metric.read() {
+            Ok(metric) => metric.clone(),
+            Err(_) => "unknown".to_string(),
+        };
         dict.set_item("distance_metric", distance_metric)?;
         
         Ok(dict.into())

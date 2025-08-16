@@ -51,7 +51,7 @@ pub struct HnswIndexData {
     dims: usize,
     user_ids: Vec<i64>,
     vectors: Vec<Vec<f32>>,
-    config: HnswConfig,
+    pub config: HnswConfig,
 }
 
 pub struct HnswIndex {
@@ -59,7 +59,7 @@ pub struct HnswIndex {
     dims: usize,
     user_ids: Vec<i64>,
     vectors: Vec<Vec<f32>>, // Added field
-    config: HnswConfig,
+        pub config: HnswConfig,
 }
 
 impl HnswIndex {
@@ -139,7 +139,19 @@ impl HnswIndex {
     }
 
     pub fn insert(&mut self, item: &[f32], user_id: i64) {
+        // Validate user_id: must be non-negative
+        if user_id < 0 {
+            return;
+        }
+        // Validate vector dimension
+        if item.len() != self.dims {
+            return;
+        }
         let internal_id = self.user_ids.len();
+        // Prevent overflow
+        if internal_id >= self.config.max_elements {
+            return;
+        }
         self.index.insert((item, internal_id));
         self.user_ids.push(user_id);
         self.vectors.push(item.to_vec());

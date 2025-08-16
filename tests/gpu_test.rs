@@ -1,4 +1,4 @@
-#[cfg(feature = "gpu")]
+#[cfg(feature = "cuda")]
 #[test]
 fn test_l2_gpu() {
     use annie::gpu::gpu::l2_distance_gpu;

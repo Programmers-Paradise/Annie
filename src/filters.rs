@@ -68,7 +68,10 @@ impl Filter {
             FilterType::IdSet(ids) => ids.contains(&id),
             FilterType::Boolean(bits) => {
                 if index < bits.len() {
-                    bits.get(index).unwrap_or(false)
+                    match bits.get(index) {
+                        Some(val) => val,
+                        None => false,
+                    }
                 } else {
                     false
                 }
