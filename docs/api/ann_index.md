@@ -7,10 +7,10 @@ The `AnnIndex` class provides efficient brute-force nearest neighbor search with
 ### `AnnIndex(dim: int, metric: Distance)`
 Creates a new brute-force index for unit-variant metrics (Euclidean, Cosine, Manhattan, Chebyshev, Hamming, Jaccard, Angular, Canberra).
 
-- `dim` (int): Vector dimension. Must be greater than 0.
+- `dim` (int): Vector dimension. Must be greater than 0 and less than or equal to 4096.
 - `metric` (Distance): Distance metric to use for similarity computation. Options: `Distance.Euclidean()`, `Distance.Cosine()`, `Distance.Manhattan()`, `Distance.Chebyshev()`, `Distance.Hamming()`, `Distance.Jaccard()`, `Distance.Angular()`, `Distance.Canberra()`.
 - Returns: `AnnIndex`: A new empty index instance.
-- Raises: `RustAnnError`: If dimension is 0 or invalid.
+- Raises: `RustAnnError`: If dimension is 0, exceeds 4096, or is invalid.
 
 Example:
 ```python
@@ -26,10 +26,10 @@ index = AnnIndex(128, Distance.Canberra())
 ### `new_minkowski(dim: int, p: float)`
 Creates a Minkowski distance index.
 
-- `dim` (int): Vector dimension. Must be greater than 0.
+- `dim` (int): Vector dimension. Must be greater than 0 and less than or equal to 4096.
 - `p` (float): Minkowski exponent. Must be greater than 0. When p=1, equivalent to Manhattan distance. When p=2, equivalent to Euclidean distance.
 - Returns: `AnnIndex`: A new empty index instance configured for Minkowski-p distance.
-- Raises: `RustAnnError`: If dimension is 0 or p <= 0.
+- Raises: `RustAnnError`: If dimension is 0, exceeds 4096, or p <= 0.
 
 Example:
 ```python
@@ -40,10 +40,10 @@ index = AnnIndex.new_minkowski(64, 3.0)
 ### `new_with_metric(dim: int, metric_name: str)`
 Creates a new index using a custom distance metric by name.
 
-- `dim` (int): Vector dimension. Must be greater than 0.
+- `dim` (int): Vector dimension. Must be greater than 0 and less than or equal to 4096.
 - `metric_name` (str): Name of the distance metric to use. Can be built-in ("euclidean", "cosine", "manhattan", "chebyshev", "hamming", "jaccard", "angular", "canberra") or a custom metric registered via `register_metric()`.
 - Returns: `AnnIndex`: A new empty index instance.
-- Raises: `RustAnnError`: If dimension is 0 or invalid.
+- Raises: `RustAnnError`: If dimension is 0, exceeds 4096, or invalid.
 
 Example:
 ```python
@@ -58,7 +58,7 @@ Add a batch of vectors with their corresponding IDs to the index.
 
 - `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
 - `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
-- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, or if there are duplicate IDs.
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, or if the number of vectors exceeds the maximum allowed (1,000,000).
 
 Example:
 ```python
@@ -74,7 +74,7 @@ Add a batch of vectors with their corresponding IDs to the index with progress r
 - `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
 - `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
 - `progress_callback` (Callable[[int, int], None]): A callback function that takes two integers: the current number of processed vectors and the total number of vectors.
-- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, or if there are duplicate IDs.
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, or if the number of vectors exceeds the maximum allowed (1,000,000).
 
 Example:
 ```python
@@ -94,7 +94,7 @@ Internal method to add a batch of vectors with their corresponding IDs to the in
 - `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
 - `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
 - `progress_callback` (Optional[Callable[[int, int], None]]): A callback function that takes two integers: the current number of processed vectors and the total number of vectors. If None, no progress is reported.
-- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, or if there are duplicate IDs.
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, or if the number of vectors exceeds the maximum allowed (1,000,000).
 
 ### `remove(ids: List[int])`
 Remove entries from the index by their IDs.

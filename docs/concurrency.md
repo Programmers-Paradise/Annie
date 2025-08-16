@@ -10,6 +10,7 @@ Annie exposes a thread-safe version of its ANN index (`AnnIndex`) for use in Pyt
 - `PyHnswIndex` supports mapping internal IDs to user IDs and handling vector data efficiently
 - Enhanced error handling for read and write lock acquisition
 - Versioning system to manage concurrent modifications
+- Concurrency stress tests to ensure robustness under high load
 
 ## Example
 
@@ -542,3 +543,12 @@ neighbor_ids, distances = index.search(query, k=5)
 - Thread-safe indexes
 - Filtered search
 - HNSW support
+
+## Security and Error Handling
+
+- **Input Validation**: The library includes fuzz testing for input validation to ensure robustness against malformed inputs.
+- **Dimension Checks**: New checks prevent excessive dimensions and allocations, ensuring safe operation within predefined limits.
+- **Concurrency Stress Tests**: Added tests to verify the stability of concurrent operations under high load.
+- **GPU Error Conditions**: Tests to handle GPU-specific errors, such as mismatched dimensions and large allocations, are included to prevent crashes.
+
+By incorporating these updates, the documentation now reflects the latest code changes and enhancements, ensuring users have access to accurate and comprehensive information.
