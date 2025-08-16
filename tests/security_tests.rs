@@ -3,7 +3,6 @@ use rust_annie::metrics::Distance;
 use numpy::PyArrayMethods;
 use numpy::{PyArray2, PyArray1};
 use pyo3::Python;
-use ndarray::Array2;
 
 #[test]
 fn test_security_invalid_input() {

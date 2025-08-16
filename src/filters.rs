@@ -69,7 +69,7 @@ impl Filter {
             FilterType::Boolean(bits) => {
                 if index < bits.len() {
                     match bits.get(index) {
-                        Some(&val) => val,
+                        Some(val) => val,
                         None => false,
                     }
                 } else {
