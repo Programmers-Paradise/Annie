@@ -32,6 +32,14 @@ impl Index {
             Index::BruteForce(bf) => bf.search(py, vector, k, None),
             Index::Hnsw(hnsw) => {
                 let vec_slice = vector.as_slice()?;
+                // Validate vector dimension
+                if vec_slice.len() != hnsw.dims() {
+                    return Err(pyo3::exceptions::PyValueError::new_err(format!("Expected dimension {}, got {}", hnsw.dims(), vec_slice.len())));
+                }
+                // Validate k
+                if k == 0 || k > hnsw.config.max_elements {
+                    return Err(pyo3::exceptions::PyValueError::new_err(format!("Invalid k: {} (must be 1..={})", k, hnsw.config.max_elements)));
+                }
                 let results = hnsw.search(vec_slice, k);
                 let ids = results.iter().map(|&id| id as i64).collect::<Vec<_>>();
                 let distances = vec![0.0; ids.len()];
