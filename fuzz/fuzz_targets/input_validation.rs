@@ -18,13 +18,14 @@ fuzz_target!(|data: &[u8]| {
     // Try adding random data
     if let Ok(mut idx) = index {
         let n = (data[2] as usize % 8) + 1;
-        let mut vecs = vec![];
+        let mut vecs = Vec::with_capacity(n);
         for i in 0..n {
             let start = 3 + i * dim;
             let end = start + dim;
             if end > data.len() { break; }
             let v: Vec<f32> = data[start..end].iter().map(|b| *b as f32).collect();
             vecs.push(v);
+        }
         }
         let ids: Vec<usize> = (0..vecs.len()).collect();
         if !vecs.is_empty() && vecs.len() == ids.len() {
