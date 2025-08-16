@@ -27,7 +27,9 @@ fuzz_target!(|data: &[u8]| {
             vecs.push(v);
         }
         let ids: Vec<usize> = (0..vecs.len()).collect();
-        // Ignore errors, just check for panics/crashes
-        let _ = idx.add_vecs(&vecs, &ids);
+        if !vecs.is_empty() && vecs.len() == ids.len() {
+            // Ignore errors, just check for panics/crashes
+            let _ = idx.add_vecs(&vecs, &ids);
+        }
     }
 });
