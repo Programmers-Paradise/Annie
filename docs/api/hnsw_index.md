@@ -101,6 +101,10 @@ The library now supports a pluggable distance metric registry, allowing users to
 ### New Distance Metrics
 The `HnswIndex` class now supports additional distance metrics, including Hamming, Jaccard, Angular, and Canberra distances, in addition to the existing Euclidean, Cosine, Manhattan, and Chebyshev metrics.
 
+## Error Handling
+
+The library now uses the `thiserror` crate for improved error handling. This change enhances the clarity and consistency of error messages throughout the API. Users should be aware of potential changes in error types and messages when upgrading to this version.
+
 ## Example
 ```python
 import numpy as np
