@@ -2,6 +2,7 @@ name: Security Audit
 
 permissions:
   contents: read
+  security-events: write
 
 on:
   push:
@@ -22,10 +23,17 @@ jobs:
         with:
           toolchain: stable
           override: true
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Install cargo-audit
         run: cargo install cargo-audit
       - name: Run cargo audit
-        run: cargo audit
+        run: cargo audit --deny warnings
       - name: Install cargo-sbom
         run: cargo install cargo-sbom
       - name: Generate SBOM
