@@ -116,6 +116,11 @@ jobs:
           brew install python@3.12
           echo "PYO3_PYTHON=$(brew --prefix python@3.12)/bin/python3.12" >> $GITHUB_ENV
           echo "PYTHON_SYS_EXECUTABLE=$(brew --prefix python@3.12)/bin/python3.12" >> $GITHUB_ENV
+          brew update
+          brew install python@3.12
+          echo "PYO3_PYTHON=$(brew --prefix python@3.12)/bin/python3.12" >> $GITHUB_ENV
+          echo "PYTHON_SYS_EXECUTABLE=$(brew --prefix python@3.12)/bin/python3.12" >> $GITHUB_ENV
+          echo "$(brew --prefix python@3.12)/bin" >> $GITHUB_PATH
           export PATH="$(brew --prefix python@3.12)/bin:$PATH"
       - name: Build universal2 wheels
         uses: PyO3/maturin-action@v1
