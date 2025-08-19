@@ -27,8 +27,13 @@ jobs:
             target: x86_64
     steps:
       - uses: actions/checkout@v4
-      - name: Install Python 3.12 dev headers
-        run: sudo apt-get update && sudo apt-get install -y python3.12-dev
+      - name: Install Python 3.12 and dev headers (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository ppa:deadsnakes/ppa
+          sudo apt-get update
+          sudo apt-get install -y python3.12 python3.12-dev
       - uses: actions/setup-python@v5
         with:
           python-version: 3.12
