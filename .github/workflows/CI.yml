@@ -27,9 +27,23 @@ jobs:
             target: x86_64
     steps:
       - uses: actions/checkout@v4
+      - name: Install Python 3.12 and dev headers (Ubuntu)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository ppa:deadsnakes/ppa
+          sudo apt-get update
+      - name: Install Python 3.12 and dev headers (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository ppa:deadsnakes/ppa
+          sudo apt-get update
+          sudo apt-get install -y python3.12 python3.12-dev
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: 3.11
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -54,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: 3.11
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -81,7 +95,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: 3.11
           architecture: ${{ matrix.platform.target }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -101,7 +115,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: 3.x
+          python-version: 3.12
+      - name: Install Python 3.12 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install python@3.12
+          echo "PYO3_PYTHON=$(brew --prefix python@3.12)/bin/python3.12" >> $GITHUB_ENV
+          echo "PYTHON_SYS_EXECUTABLE=$(brew --prefix python@3.12)/bin/python3.12" >> $GITHUB_ENV
+          echo "$(brew --prefix python@3.12)/bin" >> $GITHUB_PATH
       - name: Build universal2 wheels
         uses: PyO3/maturin-action@v1
         with:
