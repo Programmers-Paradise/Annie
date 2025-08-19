@@ -5,9 +5,11 @@ This repository uses automated dependency scanning, SBOM generation, and enhance
 
 ## Automated Dependency Scanning
 - Uses [`cargo audit`](https://github.com/RustSec/cargo-audit) in CI to detect vulnerable dependencies.
+- The workflow now includes caching of the cargo registry to improve efficiency.
+- The `cargo audit` command has been updated to deny warnings, ensuring stricter compliance.
 - Run manually with:
   ```bash
-  cargo audit
+  cargo audit --deny warnings
   ```
 
 ## SBOM Generation
