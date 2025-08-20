@@ -5,6 +5,7 @@ mod rocm;
 mod memory;
 mod device;
 mod precision;
+pub mod monitoring;
 
 use thiserror::Error;
 
@@ -89,4 +90,4 @@ pub fn l2_distance_gpu(
 
 pub use device::set_active_device;
 pub use precision::Precision;
-pub use memory::GpuMemoryPool;
+pub use memory::{GpuMemoryPool, MemoryStats};

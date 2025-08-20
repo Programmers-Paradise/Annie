@@ -140,6 +140,88 @@ mod tests {
     }
 
     #[test]
+    fn test_memory_statistics_tracking() {
+        use std::time::Duration;
+        
+        let pool = GpuMemoryPool::new();
+        let device_id = 0;
+        
+        // Get initial stats
+        let initial_stats = pool.get_device_stats(device_id);
+        assert!(initial_stats.is_some());
+        let stats = initial_stats.unwrap();
+        assert_eq!(stats.allocation_count, 0);
+        assert_eq!(stats.cache_hits, 0);
+        
+        // Allocate some buffers
+        let _buffer1 = pool.get_managed_buffer(device_id, 256, Precision::Fp32);
+        let _buffer2 = pool.get_managed_buffer(device_id, 256, Precision::Fp32); // Should be cache miss
+        
+        // Return and re-request to test cache hit
+        drop(_buffer1);
+        let _buffer3 = pool.get_managed_buffer(device_id, 256, Precision::Fp32); // Should be cache hit
+        
+        // Check updated stats
+        let final_stats = pool.get_device_stats(device_id).unwrap();
+        assert!(final_stats.allocation_count >= 2);
+        assert!(final_stats.cache_hits >= 1);
+        assert!(final_stats.cache_misses >= 2);
+        
+        // Test cache efficiency
+        let efficiency = pool.cache_efficiency(device_id).unwrap();
+        assert!(efficiency >= 0.0 && efficiency <= 1.0);
+    }
+
+    #[test]
+    fn test_summary_statistics() {
+        let pool = GpuMemoryPool::new();
+        
+        // Allocate on multiple devices
+        let _buffer1 = pool.get_managed_buffer(0, 256, Precision::Fp32);
+        let _buffer2 = pool.get_managed_buffer(1, 512, Precision::Fp16);
+        
+        // Get summary stats
+        let summary = pool.summary_stats();
+        assert!(summary.len() >= 2);
+        
+        // Check that both devices have stats
+        assert!(summary.contains_key(&0));
+        assert!(summary.contains_key(&1));
+        
+        // Verify stats make sense
+        for (device_id, stats) in summary {
+            assert!(stats.allocation_count > 0);
+            println!("Device {}: {} allocations, efficiency: {:.2}%", 
+                     device_id, stats.allocation_count, 
+                     pool.cache_efficiency(device_id).unwrap_or(0.0) * 100.0);
+        }
+    }
+
+    #[test]
+    fn test_maintenance_cleanup() {
+        use std::time::Duration;
+        
+        let pool = GpuMemoryPool::new();
+        let device_id = 0;
+        
+        // Allocate and return some buffers to populate cache
+        for i in 0..10 {
+            let buffer = pool.get_buffer(device_id, 128 * (i + 1), Precision::Fp32);
+            pool.return_buffer(device_id, buffer, 128 * (i + 1), Precision::Fp32);
+        }
+        
+        // Get stats before cleanup
+        let stats_before = pool.get_device_stats(device_id).unwrap();
+        
+        // Perform maintenance cleanup (use very short interval to force cleanup)
+        pool.maintenance_cleanup(Duration::from_nanos(1));
+        
+        // Stats should show cleanup occurred
+        let stats_after = pool.get_device_stats(device_id).unwrap();
+        assert!(stats_after.last_cleanup.is_some());
+    }
+
+    #[test]
     fn test_buffer_properties() {
         let pool = GpuMemoryPool::new();
         let device_id = 0;

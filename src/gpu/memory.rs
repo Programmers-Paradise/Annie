@@ -1,6 +1,33 @@
 use crate::gpu::{GpuError, Precision};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+/// Memory usage statistics for monitoring
+#[derive(Debug, Clone)]
+pub struct MemoryStats {
+    pub allocated: usize,
+    pub peak_usage: usize,
+    pub allocation_count: u64,
+    pub deallocation_count: u64,
+    pub cache_hits: u64,
+    pub cache_misses: u64,
+    pub last_cleanup: Option<Instant>,
+}
+
+impl Default for MemoryStats {
+    fn default() -> Self {
+        Self {
+            allocated: 0,
+            peak_usage: 0,
+            allocation_count: 0,
+            deallocation_count: 0,
+            cache_hits: 0,
+            cache_misses: 0,
+            last_cleanup: None,
+        }
+    }
+}
 
 /// RAII wrapper for GPU memory buffer with automatic cleanup
 pub struct GpuBuffer {
@@ -129,6 +156,7 @@ struct DeviceMemoryPool {
     peak_usage: usize,
     max_pool_size: usize,
     fragmentation_threshold: f32,
+    stats: MemoryStats,
 }
 
 impl DeviceMemoryPool {
@@ -139,6 +167,7 @@ impl DeviceMemoryPool {
             peak_usage: 0,
             max_pool_size: 1024 * 1024 * 1024, // 1GB default max pool size
             fragmentation_threshold: 0.5, // Cleanup when 50% fragmented
+            stats: MemoryStats::default(),
         }
     }
 
@@ -147,9 +176,12 @@ impl DeviceMemoryPool {
         if let Some(buffers) = self.buffers.get_mut(&key) {
             if let Some(buf) = buffers.pop() {
                 self.record_allocation(buf.len());
+                self.stats.cache_hits += 1;
                 return buf;
             }
         }
+        
+        self.stats.cache_misses += 1;
         
         let elem_size = match precision {
             Precision::Fp32 => 4,
@@ -182,6 +214,7 @@ impl DeviceMemoryPool {
     fn record_allocation(&mut self, bytes: usize) {
         self.allocated += bytes;
         self.peak_usage = self.peak_usage.max(self.allocated);
+        self.stats.allocation_count += 1;
     }
 
     fn record_deallocation(&mut self, bytes: usize) {
@@ -190,6 +223,7 @@ impl DeviceMemoryPool {
         } else {
             self.allocated -= bytes;
         }
+        self.stats.deallocation_count += 1;
     }
 
     /// Clean up fragmented buffers to reduce memory pressure
@@ -212,12 +246,15 @@ impl DeviceMemoryPool {
                 buffers.truncate(avg_buffers_per_type * 2);
             }
         }
+        
+        self.stats.last_cleanup = Some(Instant::now());
     }
 
     /// Emergency cleanup - remove all cached buffers
     fn emergency_cleanup(&mut self) {
         self.buffers.clear();
         self.allocated = 0;
+        self.stats.last_cleanup = Some(Instant::now());
     }
 
     /// Get memory pressure ratio (0.0 = no pressure, 1.0 = at limit)
@@ -230,6 +267,32 @@ impl DeviceMemoryPool {
         self.max_pool_size = max_size;
         if self.allocated > max_size {
             self.cleanup_fragmented_buffers();
+        }
+    }
+
+    /// Get detailed memory statistics
+    fn get_stats(&self) -> MemoryStats {
+        let mut stats = self.stats.clone();
+        stats.allocated = self.allocated;
+        stats.peak_usage = self.peak_usage;
+        stats
+    }
+
+    /// Get cache efficiency (hits / total requests)
+    fn cache_efficiency(&self) -> f32 {
+        let total = self.stats.cache_hits + self.stats.cache_misses;
+        if total == 0 {
+            1.0
+        } else {
+            self.stats.cache_hits as f32 / total as f32
+        }
+    }
+
+    /// Check if cleanup is needed based on time since last cleanup
+    fn needs_cleanup(&self, cleanup_interval: Duration) -> bool {
+        match self.stats.last_cleanup {
+            Some(last) => last.elapsed() > cleanup_interval,
+            None => false,
         }
     }
 }
@@ -334,5 +397,49 @@ impl GpuMemoryPool {
         }
         
         (total_allocated, total_peak)
+    }
+
+    /// Get detailed memory statistics for a device
+    pub fn get_device_stats(&self, device_id: usize) -> Option<MemoryStats> {
+        let pool = {
+            let pools = self.0.lock().unwrap();
+            pools.get(&device_id).cloned()
+        }?;
+        let pool = pool.lock().unwrap();
+        Some(pool.get_stats())
+    }
+
+    /// Get cache efficiency for a device
+    pub fn cache_efficiency(&self, device_id: usize) -> Option<f32> {
+        let pool = {
+            let pools = self.0.lock().unwrap();
+            pools.get(&device_id).cloned()
+        }?;
+        let pool = pool.lock().unwrap();
+        Some(pool.cache_efficiency())
+    }
+
+    /// Perform maintenance cleanup on devices that haven't been cleaned recently
+    pub fn maintenance_cleanup(&self, cleanup_interval: Duration) {
+        let pools = self.0.lock().unwrap();
+        for pool in pools.values() {
+            let mut pool = pool.lock().unwrap();
+            if pool.needs_cleanup(cleanup_interval) {
+                pool.cleanup_fragmented_buffers();
+            }
+        }
+    }
+
+    /// Get summary statistics across all devices
+    pub fn summary_stats(&self) -> HashMap<usize, MemoryStats> {
+        let pools = self.0.lock().unwrap();
+        let mut summary = HashMap::new();
+        
+        for (&device_id, pool) in pools.iter() {
+            let pool = pool.lock().unwrap();
+            summary.insert(device_id, pool.get_stats());
+        }
+        
+        summary
     }
 }
