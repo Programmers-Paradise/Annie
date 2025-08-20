@@ -1,5 +1,10 @@
 use crate::gpu::GpuError;
 
+#[cfg(feature = "cuda")]
+use crate::gpu::cuda;
+#[cfg(feature = "rocm")]
+use crate::gpu::rocm;
+
 static ACTIVE_DEVICE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub fn set_active_device(device_id: usize) -> Result<(), GpuError> {

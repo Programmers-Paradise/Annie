@@ -18,6 +18,8 @@ pub enum GpuError {
     Rocm(#[from] hip_runtime::Status),
     #[error("Memory allocation failed: {0}")]
     Allocation(String),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
     #[error("Unsupported precision type")]
     UnsupportedPrecision,
     #[error("Device index out of range: {0}")]
