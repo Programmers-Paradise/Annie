@@ -25,24 +25,79 @@ impl GpuBackend for CudaBackend {
         device_id: usize,
         precision: Precision,
     ) -> Result<Vec<f32>, GpuError> {
-        set_active_device(device_id)?;
-        let ctx = create_cuda_context()?;
-        let stream = create_stream()?;
-        let (kernel_name, ptx) = get_kernel_and_ptx(precision);
-        let module = load_module(ptx)?;
-        let func = get_kernel_function(&module, &kernel_name)?;
-        let (queries_conv, corpus_conv) = convert_data(queries, corpus, precision)?;
-        let mut pool = MEMORY_POOL.lock().unwrap();
-        if queries_conv.len() != n_queries * dim * precision.element_size() || corpus_conv.len() != n_vectors * dim * precision.element_size() {
-            return Err(GpuError::InvalidInput("Input buffer size does not match expected dimensions".to_string()));
+        // Validate inputs first
+        if queries.is_empty() || corpus.is_empty() {
+            return Err(GpuError::InvalidInput("Empty input arrays".to_string()));
         }
-        let (query_buf, corpus_buf, mut out_buf) = allocate_buffers(&mut pool, device_id, &queries_conv, &corpus_conv, n_queries, n_vectors, precision);
-        let (d_query, d_corpus, mut d_out) = copy_data_to_device(&queries_conv, &corpus_conv, &mut out_buf)?;
-        launch_l2_kernel(&func, &stream, &d_query, &d_corpus, &mut d_out, n_queries, n_vectors, dim)?;
-        let results = copy_results_from_device(&stream, &mut d_out, n_queries, n_vectors)?;
+        
+        if queries.len() != n_queries * dim || corpus.len() != n_vectors * dim {
+            return Err(GpuError::InvalidInput("Input array sizes don't match specified dimensions".to_string()));
+        }
+
+        // Set up CUDA context with RAII cleanup
+        cust::device::set_device(device_id as u32).map_err(GpuError::Cuda)?;
+        let _ctx = cust::quick_init().map_err(GpuError::Cuda)?;
+        let stream = Stream::new(StreamFlags::NON_BLOCKING, None).map_err(GpuError::Cuda)?;
+        
+        // Get kernel
+        let (kernel_name, ptx) = get_kernel_and_ptx(precision);
+        let module = Module::from_ptx(ptx, &[]).map_err(GpuError::Cuda)?;
+        let func = module.get_function(&kernel_name).map_err(GpuError::Cuda)?;
+        
+        // Convert data to target precision
+        let (queries_conv, corpus_conv) = convert_data(queries, corpus, precision)?;
+        
+        // Validate converted data sizes
+        let expected_query_size = n_queries * dim * precision.element_size();
+        let expected_corpus_size = n_vectors * dim * precision.element_size();
+        if queries_conv.len() != expected_query_size || corpus_conv.len() != expected_corpus_size {
+            return Err(GpuError::InvalidInput("Converted buffer size mismatch".to_string()));
+        }
+
+        // Use RAII memory management
+        let pool = MEMORY_POOL.clone();
+        let mut managed_pool = pool.lock().unwrap();
+        
+        // Get managed buffers that auto-cleanup on drop
+        let mut query_buffer = managed_pool.get_managed_buffer(device_id, queries_conv.len(), precision);
+        let mut corpus_buffer = managed_pool.get_managed_buffer(device_id, corpus_conv.len(), precision);
+        let mut output_buffer = managed_pool.get_managed_buffer(device_id, n_queries * n_vectors * 4, Precision::Fp32); // 4 bytes for f32 output
+        
+        // Copy data to buffers
+        query_buffer.as_mut_slice().copy_from_slice(&queries_conv);
+        corpus_buffer.as_mut_slice().copy_from_slice(&corpus_conv);
+        
+        // Release the pool lock before GPU operations
+        drop(managed_pool);
+        
+        // Allocate device buffers with RAII cleanup
+        let d_query = DeviceBuffer::from_slice(query_buffer.as_slice()).map_err(GpuError::Cuda)?;
+        let d_corpus = DeviceBuffer::from_slice(corpus_buffer.as_slice()).map_err(GpuError::Cuda)?;
+        let mut d_output = DeviceBuffer::<f32>::zeroed(n_queries * n_vectors).map_err(GpuError::Cuda)?;
+        
+        // Launch kernel
+        let block_size = 256;
+        let grid_size = ((n_queries * n_vectors + block_size - 1) / block_size) as u32;
+        
+        unsafe {
+            launch!(func<<<grid_size, block_size, 0, stream>>>(
+                d_query.as_device_ptr(),
+                d_corpus.as_device_ptr(),
+                d_output.as_device_ptr(),
+                n_queries as i32,
+                n_vectors as i32,
+                dim as i32
+            )).map_err(GpuError::Cuda)?;
+        }
+        
+        // Wait for completion and copy results
+        stream.synchronize().map_err(GpuError::Cuda)?;
+        
+        let mut results = vec![0.0f32; n_queries * n_vectors];
+        d_output.copy_to(&mut results).map_err(GpuError::Cuda)?;
+        
+        // Buffers automatically cleaned up by RAII Drop implementations
         Ok(results)
-        // return_buffers must be called after results are no longer needed, or ensure device memory is not dropped before host copy completes
-        return_buffers(&mut pool, device_id, query_buf, corpus_buf, out_buf, &queries_conv, &corpus_conv, &results, precision);
     }
 // Refactor: Move device setup, kernel selection, memory management, and kernel launch into separate helper functions or modules to reduce complexity and improve maintainability.
 
@@ -56,7 +111,28 @@ impl GpuBackend for CudaBackend {
     }
 }
 
-/// Convert data to target precision
+/// Get kernel name and PTX based on precision
+fn get_kernel_and_ptx(precision: Precision) -> (String, &'static str) {
+    match precision {
+        Precision::Fp32 => ("l2_distance_fp32".to_string(), include_str!("kernels/l2_kernel_fp32.ptx")),
+        Precision::Fp16 => ("l2_distance_fp16".to_string(), include_str!("kernels/l2_kernel_fp16.ptx")), 
+        Precision::Int8 => ("l2_distance_int8".to_string(), include_str!("kernels/l2_kernel_int8.ptx")),
+    }
+}
+
+impl CudaBackend {
+    /// Check if precision is supported
+    pub fn supports_precision(precision: Precision) -> bool {
+        match precision {
+            Precision::Fp32 | Precision::Fp16 | Precision::Int8 => true,
+        }
+    }
+}
+
+/// Get device count for CUDA
+pub fn device_count() -> usize {
+    cust::device::get_count().unwrap_or(0) as usize
+}
 fn convert_data(
     queries: &[f32],
     corpus: &[f32],
