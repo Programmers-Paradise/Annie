@@ -1,6 +1,6 @@
 # ThreadSafeAnnIndex - Thread-safe Nearest Neighbor Index
 
-The `ThreadSafeAnnIndex` class provides a thread-safe wrapper around `AnnIndex` for concurrent access.
+The `ThreadSafeAnnIndex` class provides a thread-safe wrapper around `AnnIndex` for concurrent access, now utilizing helper functions for acquiring locks to ensure consistent error handling.
 
 ## Constructor
 
@@ -18,31 +18,31 @@ Internal constructor for testing: wraps an existing `Arc<RwLock<AnnIndex>>`.
 ## Methods
 
 ### `add(data: ndarray, ids: ndarray)`
-Thread-safe vector addition.
+Thread-safe vector addition using a helper function to acquire a write lock.
 
 ### `remove(ids: List[int])`
-Thread-safe removal by IDs.
+Thread-safe removal by IDs using a helper function to acquire a write lock.
 
 ### `update(id: int, vector: ndarray)`
-Thread-safe update of a vector by ID.
+Thread-safe update of a vector by ID using a helper function to acquire a write lock.
 
 ### `compact()`
-Thread-safe compaction of the index to remove deleted entries.
+Thread-safe compaction of the index to remove deleted entries using a helper function to acquire a write lock.
 
 ### `version() -> int`
-Returns the current version of the index, useful for tracking changes.
+Returns the current version of the index, useful for tracking changes. Uses a helper function to acquire a read lock, returning 0 if the lock cannot be acquired.
 
 ### `search(query: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe single query search.
+Thread-safe single query search using a helper function to acquire a read lock.
 
 ### `search_batch(queries: ndarray, k: int) -> Tuple[ndarray, ndarray]`
-Thread-safe batch search. This method now includes enhanced error handling for read locks. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock for search_batch".
+Thread-safe batch search. This method now includes enhanced error handling for read locks using a helper function. If a read lock cannot be acquired, a `RustAnnError` is raised with the message "Failed to acquire read lock for search_batch".
 
 ### `search_filter_py(query: ndarray, k: int, filter_fn: Callable[[int], bool]) -> Tuple[ndarray, ndarray]`
-Thread-safe filtered search using a custom Python callback function.
+Thread-safe filtered search using a custom Python callback function and a helper function to acquire a read lock.
 
 ### `save(path: str)`
-Thread-safe save.
+Thread-safe save using a helper function to acquire a read lock.
 
 ### `static load(path: str) -> ThreadSafeAnnIndex`
 Thread-safe load.
