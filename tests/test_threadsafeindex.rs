@@ -33,6 +33,6 @@ fn test_search_batch_poisoned_lock() {
         assert!(result.is_err());
         let msg = format!("{:?}", result.unwrap_err());
         println!("Search returned error: {}", msg);
-        assert!(msg.to_lowercase().contains("lock error"));
+    assert!(msg.to_lowercase().contains("poison"));
     });
 }
