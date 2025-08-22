@@ -1,3 +1,32 @@
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::thread;
+
+    #[test]
+    fn test_poisoned_lock_distance_registry() {
+        // Poison the lock
+        let _ = thread::spawn(|| {
+            let _guard = DISTANCE_REGISTRY.lock().unwrap();
+            panic!("Poisoning lock intentionally");
+        }).join();
+
+        // Try to access the registry after poisoning
+        let result = get_distance_function_safe("euclidean");
+        match result {
+            Err(err) => {
+                let msg = err.to_string();
+                println!("DistanceRegistry returned error: {}", msg);
+                assert!(msg.to_lowercase().contains("poison"));
+            },
+            Ok(_) => panic!("Expected error due to poisoned lock"),
+        }
+    }
+}
+/// Helper to acquire the DISTANCE_REGISTRY lock and handle poisoning consistently
+fn get_registry_lock() -> Result<std::sync::MutexGuard<'static, Option<DistanceRegistry>>, String> {
+    DISTANCE_REGISTRY.lock().map_err(|_| "Lock poisoned".to_string())
+}
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -318,7 +347,7 @@ impl DistanceRegistry {
 static DISTANCE_REGISTRY: Mutex<Option<DistanceRegistry>> = Mutex::new(None);
 
 pub fn init_distance_registry() {
-    if let Ok(mut registry) = DISTANCE_REGISTRY.lock() {
+    if let Ok(mut registry) = get_registry_lock() {
         if registry.is_none() {
             *registry = Some(DistanceRegistry::new());
         }
@@ -327,7 +356,7 @@ pub fn init_distance_registry() {
 
 /// Register a custom distance function.
 pub fn register_distance_function(name: &str, func: Box<dyn DistanceFunction>) -> Result<(), String> {
-    let mut registry_guard = DISTANCE_REGISTRY.lock().map_err(|_| "Lock poisoned".to_string())?;
+    let mut registry_guard = get_registry_lock()?;
     match registry_guard.as_mut() {
         Some(registry) => {
             registry.register(name, func);
@@ -339,19 +368,19 @@ pub fn register_distance_function(name: &str, func: Box<dyn DistanceFunction>) -
 
 /// Old function (returns Option)
 pub fn get_distance_function(name: &str) -> Option<Box<dyn DistanceFunction>> {
-    let registry_guard = DISTANCE_REGISTRY.lock().ok()?;
+    let registry_guard = get_registry_lock().ok()?;
     registry_guard.as_ref()?.get(name)
 }
 
 /// New safe version (returns Result)
 pub fn get_distance_function_safe(name: &str) -> Result<Box<dyn DistanceFunction>, DistanceRegistryError> {
-    let registry_guard = DISTANCE_REGISTRY.lock()?;
+    let registry_guard = DISTANCE_REGISTRY.lock().map_err(|_| DistanceRegistryError::LockPoisoned)?;
     let registry = registry_guard.as_ref().ok_or(DistanceRegistryError::RegistryNotInitialized)?;
     registry.get(name).ok_or(DistanceRegistryError::MetricNotFound(name.to_string()))
 }
 
 pub fn list_distance_metrics() -> Vec<String> {
-    if let Ok(guard) = DISTANCE_REGISTRY.lock() {
+    if let Ok(guard) = get_registry_lock() {
         if let Some(reg) = &*guard {
             return reg.list_metrics();
         }

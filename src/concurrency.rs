@@ -1,5 +1,17 @@
 //! Concurrency utilities: Python-visible thread-safe wrapper around `AnnIndex`.
 
+use pyo3::PyErr;
+
+/// Helper to acquire a write lock and handle poisoning consistently
+fn get_write_lock<'a>(lock: &'a Arc<RwLock<AnnIndex>>) -> Result<std::sync::RwLockWriteGuard<'a, AnnIndex>, PyErr> {
+    lock.write().map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to acquire write lock: {}", e)))
+}
+
+/// Helper to acquire a read lock and handle poisoning consistently
+fn get_read_lock<'a>(lock: &'a Arc<RwLock<AnnIndex>>) -> Result<std::sync::RwLockReadGuard<'a, AnnIndex>, PyErr> {
+    lock.read().map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to acquire read lock: {}", e)))
+}
+
 use std::sync::{Arc, RwLock};
 use pyo3::prelude::*;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2};
@@ -32,42 +44,30 @@ impl ThreadSafeAnnIndex {
         data: PyReadonlyArray2<f32>,
         ids: PyReadonlyArray1<i64>,
     ) -> PyResult<()> {
-        let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
-        })?;
+    let mut guard = get_write_lock(&self.inner)?;
         guard.add(py, data, ids)
     }
 
     /// Remove by ID.
     pub fn remove(&self, _py: Python, ids: Vec<i64>) -> PyResult<()> {
-        let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
-        })?;
+    let mut guard = get_write_lock(&self.inner)?;
         guard.remove(ids)
     }
 
     pub fn update(&self, _py: Python, id: i64, vector: Vec<f32>) -> PyResult<()> {
-        let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
-        })?;
+    let mut guard = get_write_lock(&self.inner)?;
         guard.update(id, vector).map_err(|e| RustAnnError::py_err("Update Error", format!("Failed to update: {}", e)))
     }
 
     pub fn compact(&self, _py: Python) -> PyResult<()> {
-        let mut guard = self.inner.write().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire write lock: {}", e))
-        })?;
+    let mut guard = get_write_lock(&self.inner)?;
         guard.compact().map_err(|e| RustAnnError::py_err("Compact Error", format!("Failed to compact: {}", e)))
     }
     
     pub fn version(&self, _py: Python) -> u64 {
-        match self.inner.read() {
+        match get_read_lock(&self.inner) {
             Ok(guard) => guard.version(),
-            Err(_) => {
-                // Return a sentinel value or propagate error as needed
-                // Here, returning 0 to indicate error
-                0
-            }
+            Err(_) => 0 // Optionally propagate error instead of returning 0
         }
     }
 
@@ -78,9 +78,7 @@ impl ThreadSafeAnnIndex {
         query: PyReadonlyArray1<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
-        let guard = self.inner.read().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
-        })?;
+    let guard = get_read_lock(&self.inner)?;
         guard.search(py, query, k, None)
     }
 
@@ -91,17 +89,13 @@ impl ThreadSafeAnnIndex {
         data: PyReadonlyArray2<f32>,
         k: usize,
     ) -> PyResult<(PyObject, PyObject)> {
-        let guard = self.inner.read().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
-        })?;
+    let guard = get_read_lock(&self.inner)?;
         guard.search_batch(py, data, k, None)
     }
 
     /// Save to disk.
     pub fn save(&self, _py: Python, path: &str) -> PyResult<()> {
-        let guard = self.inner.read().map_err(|e| {
-            RustAnnError::py_err("Lock Error", format!("Failed to acquire read lock: {}", e))
-        })?;
+    let guard = get_read_lock(&self.inner)?;
         guard.save(path)
     }
 
