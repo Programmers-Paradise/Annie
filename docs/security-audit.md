@@ -22,6 +22,7 @@ This repository uses automated dependency scanning, SBOM generation, and enhance
 ## Dependency Version Pinning
 - All critical dependencies are pinned to specific versions in `Cargo.toml`.
 - Avoid using wildcards or loose version ranges.
+- The `thiserror` dependency has been updated to version `2.0.16` for improved security and stability.
 
 ## License Compliance
 - Use [`cargo-license`](https://github.com/onur/cargo-license) to review dependency licenses.
