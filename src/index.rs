@@ -1,20 +1,14 @@
 use pyo3::prelude::*;
-use numpy::{PyReadonlyArray1, PyReadonlyArray2, IntoPyArray};
-use ndarray::Array2;
-use ndarray::s;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
-use std::time::Instant;
-use bit_vec::BitVec;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 
 use crate::backend::AnnBackend;
 use crate::storage::{save_index, load_index};
 use crate::metrics::Distance;
 use crate::errors::RustAnnError;
-use crate::monitoring::MetricsCollector;
 use crate::filters::Filter;
 
 #[pyclass]
@@ -34,16 +28,139 @@ pub struct AnnIndex {
     pub(crate) max_deleted_ratio: f32,
     /// Optional metrics collector for monitoring
     #[serde(skip)]
-    pub(crate) metrics: Option<Arc<MetricsCollector>>,
+    pub(crate) metrics: Option<Arc<crate::monitoring::MetricsCollector>>,
     #[serde(skip)]
-    pub(crate) boolean_filters: Mutex<HashMap<String, BitVec>>,
+    pub(crate) boolean_filters: Mutex<HashMap<String, bit_vec::BitVec>>,
     #[serde(skip)]
     pub(crate) version: Arc<AtomicU64>,
+    /// Metadata schema: field name -> type
+    pub(crate) metadata_schema: Option<HashMap<String, MetadataType>>,
+    /// Columnar metadata storage: field name -> Vec of values
+    pub(crate) metadata_columns: Option<HashMap<String, Vec<MetadataValue>>>,
+
+
+/// Supported metadata types
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum MetadataType {
+    Int,
+    Float,
+    String,
+    Tags,
+    Timestamp,
+}
+
+/// Metadata value
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum MetadataValue {
+    Int(i64),
+    Float(f64),
+    String(String),
+    Tags(Vec<String>),
+    Timestamp(i64), // Unix timestamp
 }
 
 
 #[pymethods]
 impl AnnIndex {
+    /// Set metadata schema from Python (dict: str -> MetadataType)
+    pub fn py_set_metadata_schema(&mut self, schema: HashMap<String, MetadataType>) -> PyResult<()> {
+        self.set_metadata_schema(schema)
+    }
+
+    /// Add vectors, IDs, and metadata from Python
+    pub fn py_add_with_metadata(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Vec<HashMap<String, MetadataValue>>) -> PyResult<()> {
+        self.add_with_metadata(_py, data, ids, metadata)
+    }
+
+    /// Search with metadata-aware filtering from Python
+    pub fn py_search_filtered(&self, query: Vec<f32>, k: usize, predicate: &str) -> PyResult<(Vec<i64>, Vec<f32>)> {
+        self.search_filtered(query, k, predicate)
+    }
+    /// Search with metadata-aware filtering using a predicate string
+    pub fn search_filtered(&self, query: Vec<f32>, k: usize, predicate: &str) -> PyResult<(Vec<i64>, Vec<f32>)> {
+        // Parse predicate (stub)
+        let candidate_mask = self.evaluate_predicate(predicate)?;
+        // Filter entries by candidate_mask
+        let mut filtered_entries = Vec::new();
+        for (i, entry_opt) in self.entries.iter().enumerate() {
+            if let Some((id, vector, norm)) = entry_opt {
+                if candidate_mask[i] {
+                    filtered_entries.push((id, vector, norm));
+                }
+            }
+        }
+        // Compute distances only for filtered candidates (stub: use brute-force)
+        let mut results: Vec<(i64, f32)> = filtered_entries.iter().map(|(id, vector, _)| {
+            let dist = self.metric.distance(&query, vector);
+            (**id, dist)
+        }).collect();
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let ids = results.iter().take(k).map(|(id, _)| *id).collect();
+        let dists = results.iter().take(k).map(|(_, dist)| *dist).collect();
+        Ok((ids, dists))
+    }
+
+    /// Evaluate predicate string against metadata columns (stub: returns all true)
+    fn evaluate_predicate(&self, _predicate: &str) -> PyResult<Vec<bool>> {
+        let n = self.entries.len();
+        if self.metadata_columns.is_none() {
+            return Ok(vec![true; n]);
+        }
+        let columns = self.metadata_columns.as_ref().unwrap();
+        // Only support simple predicates: field==value, field!=value, field>value, field<value, AND, OR
+        // Example: country=="IN" AND score>0.8
+        let mut mask = vec![true; n];
+        let clauses: Vec<&str> = _predicate.split("AND").map(|s| s.trim()).collect();
+        for clause in clauses {
+            let mut clause_mask = vec![false; n];
+            // Support ==, !=, >, <
+            if let Some((field, op, value)) = Self::parse_clause(clause) {
+                if let Some(col) = columns.get(field) {
+                    for (i, v) in col.iter().enumerate() {
+                        clause_mask[i] = match (op, v) {
+                            ("==", MetadataValue::String(s)) => s == value,
+                            ("!=", MetadataValue::String(s)) => s != value,
+                            (">", MetadataValue::Float(f)) => f > &value.parse::<f64>().unwrap_or(f64::MIN),
+                            ("<", MetadataValue::Float(f)) => f < &value.parse::<f64>().unwrap_or(f64::MAX),
+                            ("==", MetadataValue::Int(iv)) => iv == &value.parse::<i64>().unwrap_or(i64::MIN),
+                            ("!=", MetadataValue::Int(iv)) => iv != &value.parse::<i64>().unwrap_or(i64::MIN),
+                            (">", MetadataValue::Int(iv)) => iv > &value.parse::<i64>().unwrap_or(i64::MIN),
+                            ("<", MetadataValue::Int(iv)) => iv < &value.parse::<i64>().unwrap_or(i64::MAX),
+                            // Extend for other types as needed
+                            _ => false,
+                        };
+                    }
+                }
+            }
+            // Combine with AND
+            for i in 0..n {
+                mask[i] = mask[i] && clause_mask[i];
+            }
+        }
+        Ok(mask)
+    }
+
+    /// Parse a clause like "field==value" and return (field, op, value)
+    fn parse_clause(clause: &str) -> Option<(&str, &str, &str)> {
+        for op in ["==", "!=", ">", "<"] {
+            if let Some(idx) = clause.find(op) {
+                let field = clause[..idx].trim();
+                let value = clause[idx+op.len()..].trim().trim_matches('"');
+                return Some((field, op, value));
+            }
+        }
+        None
+    }
+    }
+    /// Set metadata schema for the index
+    pub fn set_metadata_schema(&mut self, schema: HashMap<String, MetadataType>) -> PyResult<()> {
+        if self.metadata_schema.is_some() {
+            return Err(RustAnnError::py_err("Schema Already Set", "Metadata schema can only be set once"));
+        }
+        self.metadata_schema = Some(schema);
+        self.metadata_columns = Some(HashMap::new());
+        Ok(())
+    }
     #[new]
     /// Create a new index for unit-variant metrics.
     pub fn new(dim: usize, metric: Distance) -> PyResult<Self> {
@@ -116,6 +233,67 @@ impl AnnIndex {
         if ids_slice.iter().any(|&id| id < 0) {
             return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
         }
+        self.add_batch_internal(data, ids, None)
+    }
+
+    /// Add vectors, IDs, and metadata in batch.
+    pub fn add_with_metadata(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Vec<HashMap<String, MetadataValue>>) -> PyResult<()> {
+        let ids_slice = ids.as_slice()?;
+        if ids_slice.iter().any(|&id| id < 0) {
+            return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
+        }
+        let n = ids_slice.len();
+        if metadata.len() != n {
+            return Err(RustAnnError::py_err("Metadata Mismatch", "Metadata length must match number of vectors"));
+        }
+        // Validate schema
+        if let Some(schema) = &self.metadata_schema {
+            for meta in &metadata {
+                for (field, value) in meta {
+                    if let Some(expected_type) = schema.get(field) {
+                        let valid = match (expected_type, value) {
+                            (MetadataType::Int, MetadataValue::Int(_)) => true,
+                            (MetadataType::Float, MetadataValue::Float(_)) => true,
+                            (MetadataType::String, MetadataValue::String(_)) => true,
+                            (MetadataType::Tags, MetadataValue::Tags(_)) => true,
+                            (MetadataType::Timestamp, MetadataValue::Timestamp(_)) => true,
+                            _ => false,
+                        };
+                        if !valid {
+                            return Err(RustAnnError::py_err("Metadata Type Error", format!("Field '{}' type mismatch", field)));
+                        }
+                    } else {
+                        return Err(RustAnnError::py_err("Unknown Metadata Field", format!("Field '{}' not in schema", field)));
+                    }
+                }
+            }
+        }
+        // Store metadata column-wise
+        if self.metadata_columns.is_none() {
+            self.metadata_columns = Some(HashMap::new());
+        }
+        let columns = self.metadata_columns.as_mut().unwrap();
+        if let Some(schema) = &self.metadata_schema {
+            for (field, field_type) in schema {
+                let mut col: Vec<MetadataValue> = Vec::with_capacity(n);
+                for meta in &metadata {
+                    if let Some(val) = meta.get(field) {
+                        col.push(val.clone());
+                    } else {
+                        // Default value for missing field
+                        col.push(match field_type {
+                            MetadataType::Int => MetadataValue::Int(0),
+                            MetadataType::Float => MetadataValue::Float(0.0),
+                            MetadataType::String => MetadataValue::String(String::new()),
+                            MetadataType::Tags => MetadataValue::Tags(Vec::new()),
+                            MetadataType::Timestamp => MetadataValue::Timestamp(0),
+                        });
+                    }
+                }
+                columns.entry(field.clone()).or_insert(col);
+            }
+        }
+        // Add vectors and IDs as usual
         self.add_batch_internal(data, ids, None)
     }
 

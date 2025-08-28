@@ -340,6 +340,45 @@ Benchmarks are tracked over time using:
 * GitHub Actions auto-runs and updates benchmarks on every push to `main`
 * [Live Dashboard](https://programmers-paradise.github.io/Annie/)
 
+## Metadata-Aware Filtering Example
+
+```python
+from rust_annie import AnnIndex, MetadataType, MetadataValue
+import numpy as np
+
+# Define metadata schema
+schema = {
+  "country": MetadataType.String,
+  "score": MetadataType.Float,
+  "tags": MetadataType.Tags,
+}
+
+idx = AnnIndex(dim=128, metric="cosine")
+idx.py_set_metadata_schema(schema)
+
+# Prepare data
+vectors = np.random.rand(1000, 128).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+metadata = [
+  {
+    "country": MetadataValue.String("IN"),
+    "score": MetadataValue.Float(0.9),
+    "tags": MetadataValue.Tags(["sports", "trending"])
+  }
+  for _ in ids
+]
+
+# Add vectors with metadata
+idx.py_add_with_metadata(vectors, ids, metadata)
+
+# Query with predicate filtering
+query = np.random.rand(128).astype(np.float32)
+result_ids, result_dists = idx.py_search_filtered(query.tolist(), k=10, predicate='country=="IN" AND score>0.8')
+
+print("Filtered IDs:", result_ids)
+print("Distances:", result_dists)
+```
+
 ## GPU Acceleration
 
 Annie optionally supports **GPU-backed brute-force distance computation** using `cust` (CUDA for Rust). It significantly accelerates batch queries and high-dimensional searches.
