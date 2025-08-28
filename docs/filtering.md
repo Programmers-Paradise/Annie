@@ -100,6 +100,49 @@ print("Filtered IDs:", ids)  # [10, 30] (20 is filtered out)
 print("Distances:", dists)
 ```
 
+### Metadata-Aware Filtering Example
+
+The library now supports metadata-aware filtering, allowing you to filter search results based on metadata predicates.
+
+#### Example: Metadata-Aware Filtering
+
+```python
+from rust_annie import AnnIndex, MetadataType, MetadataValue
+import numpy as np
+
+# Define metadata schema
+schema = {
+  "country": MetadataType.String,
+  "score": MetadataType.Float,
+  "tags": MetadataType.Tags,
+}
+
+idx = AnnIndex(dim=128, metric="cosine")
+idx.py_set_metadata_schema(schema)
+
+# Prepare data
+vectors = np.random.rand(1000, 128).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+metadata = [
+  {
+    "country": MetadataValue.String("IN"),
+    "score": MetadataValue.Float(0.9),
+    "tags": MetadataValue.Tags(["sports", "trending"])
+  }
+  for _ in ids
+]
+
+# Add vectors with metadata
+idx.py_add_with_metadata(vectors, ids, metadata)
+
+# Query with predicate filtering
+query = np.random.rand(128).astype(np.float32)
+result_ids, result_dists = idx.py_search_filtered(query.tolist(), k=10, predicate='country=="IN" AND score>0.8')
+
+print("Filtered IDs:", result_ids)
+print("Distances:", result_dists)
+```
+
 ### Sorting Behavior
 
 The BruteForceIndex now uses `total_cmp` for sorting, which provides NaN-resistant sorting behavior. This change ensures that any NaN values in the data are handled consistently, preventing potential issues with partial comparisons.
