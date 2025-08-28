@@ -359,6 +359,65 @@ except RustAnnError as e:
     print(f"Validation error: {e}")
 ```
 
+### `py_set_metadata_schema(schema: dict)`
+Set metadata schema for the index.
+
+- `schema` (dict): A dictionary defining the metadata schema with field names as keys and `MetadataType` as values.
+- Raises: `RustAnnError`: If the schema is already set.
+
+Example:
+```python
+schema = {
+  "country": MetadataType.String,
+  "score": MetadataType.Float,
+  "tags": MetadataType.Tags,
+}
+index.py_set_metadata_schema(schema)
+```
+
+### `py_add_with_metadata(data: ndarray, ids: ndarray, metadata: List[dict])`
+Add vectors, IDs, and metadata to the index.
+
+- `data` (numpy.ndarray): N x dim array of vectors to add to the index. Each row represents a vector.
+- `ids` (numpy.ndarray): N-dimensional array of integer IDs corresponding to each vector in data.
+- `metadata` (List[dict]): A list of dictionaries containing metadata for each vector.
+- Raises: `RustAnnError`: If data and ids have different lengths, if any vector has incorrect dimension, if there are duplicate IDs, if IDs are negative, if the number of vectors exceeds the maximum allowed (1,000,000), or if metadata does not match the schema.
+
+Example:
+```python
+import numpy as np
+metadata = [
+  {
+    "country": MetadataValue.String("IN"),
+    "score": MetadataValue.Float(0.9),
+    "tags": MetadataValue.Tags(["sports", "trending"])
+  }
+  for _ in range(100)
+]
+data = np.random.rand(100, 128).astype(np.float32)
+ids = np.arange(100, dtype=np.int64)
+index.py_add_with_metadata(data, ids, metadata)
+```
+
+### `py_search_filtered(query: List[float], k: int, predicate: str) -> Tuple[List[int], List[float]]`
+Search with metadata-aware filtering using a predicate string.
+
+- `query` (List[float]): Query vector with dimension matching the index.
+- `k` (int): Number of nearest neighbors to return.
+- `predicate` (str): A string representing the filtering condition based on metadata.
+- Returns: Tuple[List[int], List[float]]: A tuple containing:
+  - filtered_ids: List of filtered neighbor IDs
+  - filtered_distances: List of corresponding distances
+- Raises: `RustAnnError`: If query dimension doesn't match index dimension, if the index is empty, if the index is modified during the search, or if k is invalid.
+
+Example:
+```python
+query = np.random.rand(128).astype(np.float32)
+result_ids, result_dists = index.py_search_filtered(query.tolist(), k=10, predicate='country=="IN" AND score>0.8')
+print("Filtered IDs:", result_ids)
+print("Distances:", result_dists)
+```
+
 ## Example
 ```python
 import numpy as np
@@ -398,6 +457,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Multi-platform** support (Linux, Windows, macOS)
 - **Automated CI** with performance tracking
 - **Real-time Metrics**: Query latency and index statistics with Prometheus integration
+- **Metadata Handling**: Define schemas, add metadata, and perform metadata-aware filtering
 
 ## Installation
 
@@ -585,6 +645,44 @@ filtered_ids, filtered_dists = index.search(query, k=3, filter=bool_filter)
 print(filtered_ids)  # [10, 30]
 ```
 
+### Metadata-Aware Filtering Example
+```python
+from rust_annie import AnnIndex, MetadataType, MetadataValue
+import numpy as np
+
+# Define metadata schema
+schema = {
+  "country": MetadataType.String,
+  "score": MetadataType.Float,
+  "tags": MetadataType.Tags,
+}
+
+idx = AnnIndex(dim=128, metric="cosine")
+idx.py_set_metadata_schema(schema)
+
+# Prepare data
+vectors = np.random.rand(1000, 128).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+metadata = [
+  {
+    "country": MetadataValue.String("IN"),
+    "score": MetadataValue.Float(0.9),
+    "tags": MetadataValue.Tags(["sports", "trending"])
+  }
+  for _ in ids
+]
+
+# Add vectors with metadata
+idx.py_add_with_metadata(vectors, ids, metadata)
+
+# Query with predicate filtering
+query = np.random.rand(128).astype(np.float32)
+result_ids, result_dists = idx.py_search_filtered(query.tolist(), k=10, predicate='country=="IN" AND score>0.8')
+
+print("Filtered IDs:", result_ids)
+print("Distances:", result_dists)
+```
+
 ### Custom Distance Metrics
 ```python
 from rust_annie import AnnIndex, register_metric, list_metrics
@@ -699,6 +797,9 @@ You’ll find:
 | version()                             | Get the current version of the index       |
 | get_info()                            | Retrieve information about the index       |
 | validate()                            | Validate the integrity of the index        |
+| py_set_metadata_schema(schema)        | Set metadata schema for the index          |
+| py_add_with_metadata(data, ids, metadata) | Add vectors, IDs, and metadata to the index |
+| py_search_filtered(query, k, predicate) | Search with metadata-aware filtering      |
 
 ## Development & CI
 
@@ -728,8 +829,12 @@ CI pipeline includes:
 ### Benchmark Automation
 
 Benchmarks are tracked over time using:
+* GitHub Actions auto-runs and updates benchmarks on every push to `main`
+* [Live Dashboard](https://programmers-paradise.github.io/Annie/)
 
 ## GPU Acceleration
+
+Annie optionally supports **GPU-backed brute-force distance computation** using `cust` (CUDA for Rust). It significantly accelerates batch queries and high-dimensional searches.
 
 ### Enable GPU in Rust
 
