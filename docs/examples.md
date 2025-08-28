@@ -53,6 +53,44 @@ filtered_ids, filtered_dists = index.search_filter_py(query, k=3, filter_fn=even
 # Only IDs 10 and 30 will be returned (20 is odd)
 ```
 
+## Metadata-Aware Filtering Example
+```python
+from rust_annie import AnnIndex, MetadataType, MetadataValue
+import numpy as np
+
+# Define metadata schema
+schema = {
+  "country": MetadataType.String,
+  "score": MetadataType.Float,
+  "tags": MetadataType.Tags,
+}
+
+idx = AnnIndex(dim=128, metric="cosine")
+idx.py_set_metadata_schema(schema)
+
+# Prepare data
+vectors = np.random.rand(1000, 128).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+metadata = [
+  {
+    "country": MetadataValue.String("IN"),
+    "score": MetadataValue.Float(0.9),
+    "tags": MetadataValue.Tags(["sports", "trending"])
+  }
+  for _ in ids
+]
+
+# Add vectors with metadata
+idx.py_add_with_metadata(vectors, ids, metadata)
+
+# Query with predicate filtering
+query = np.random.rand(128).astype(np.float32)
+result_ids, result_dists = idx.py_search_filtered(query.tolist(), k=10, predicate='country=="IN" AND score>0.8')
+
+print("Filtered IDs:", result_ids)
+print("Distances:", result_dists)
+```
+
 ## HNSW Index
 ```python
 from rust_annie import PyHnswIndex
@@ -310,6 +348,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
    - [GPU Support](#gpu-support)
    - [Fuzz Testing](#fuzz-testing)
    - [Benchmarking](#benchmarking)
+   - [Metadata-Aware Filtering Example](#metadata-aware-filtering-example)
 5. [Benchmark Results](#benchmark-results)  
 6. [API Reference](#api-reference)  
 7. [Development & CI](#development--ci)  
@@ -329,6 +368,7 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 - **Zero-copy** NumPy integration
 - **On-disk Persistence** with serialization
 - **Filtered Search** with custom Python callbacks
+- **Metadata-Aware Filtering** for advanced query capabilities
 - **GPU Acceleration** for brute-force calculations
 - **Multi-GPU** support for distributed processing
 - **Precision Selection** for optimized memory usage
@@ -500,6 +540,44 @@ filtered_ids, filtered_dists = index.search_filter_py(
 print(filtered_ids)  # [10, 30] (20 is filtered out)
 ```
 
+### Metadata-Aware Filtering Example
+```python
+from rust_annie import AnnIndex, MetadataType, MetadataValue
+import numpy as np
+
+# Define metadata schema
+schema = {
+  "country": MetadataType.String,
+  "score": MetadataType.Float,
+  "tags": MetadataType.Tags,
+}
+
+idx = AnnIndex(dim=128, metric="cosine")
+idx.py_set_metadata_schema(schema)
+
+# Prepare data
+vectors = np.random.rand(1000, 128).astype(np.float32)
+ids = np.arange(1000, dtype=np.int64)
+metadata = [
+  {
+    "country": MetadataValue.String("IN"),
+    "score": MetadataValue.Float(0.9),
+    "tags": MetadataValue.Tags(["sports", "trending"])
+  }
+  for _ in ids
+]
+
+# Add vectors with metadata
+idx.py_add_with_metadata(vectors, ids, metadata)
+
+# Query with predicate filtering
+query = np.random.rand(128).astype(np.float32)
+result_ids, result_dists = idx.py_search_filtered(query.tolist(), k=10, predicate='country=="IN" AND score>0.8')
+
+print("Filtered IDs:", result_ids)
+print("Distances:", result_dists)
+```
+
 ### Custom Metrics
 ```python
 from rust_annie import AnnIndex, register_metric, list_metrics
@@ -639,6 +717,9 @@ Same API as `AnnIndex`, safe for concurrent use.
 | new_with_metric(dim, metric_name)     | Create index with custom metric            |
 | enable_metrics(port)                  | Enable metrics collection and HTTP server  |
 | get_metrics()                         | Retrieve current metrics as a dictionary   |
+| py_set_metadata_schema(schema)        | Set metadata schema for the index          |
+| py_add_with_metadata(data, ids, metadata) | Add vectors with associated metadata    |
+| py_search_filtered(query, k, predicate) | Search with metadata-aware filtering     |
 
 ## Development & CI
 
@@ -669,8 +750,12 @@ CI pipeline includes:
 ### Benchmark Automation
 
 Benchmarks are tracked over time using:
+* GitHub Actions auto-runs and updates benchmarks on every push to `main`
+* [Live Dashboard](https://programmers-paradise.github.io/Annie/)
 
 ## GPU Acceleration
+
+Annie optionally supports **GPU-backed brute-force distance computation** using `cust` (CUDA for Rust). It significantly accelerates batch queries and high-dimensional searches.
 
 ### Enable GPU in Rust
 
