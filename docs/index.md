@@ -55,6 +55,7 @@ neighbor_ids, distances = index.search(query, k=5)
 - **Handling of Deleted Entries** with auto-compaction
 - **Enhanced Index Information Retrieval** with `get_info` method
 - **Index Integrity Validation** with `validate` method
+- **Metadata Handling** with schema and value support
 
 ## Quick Start
 
@@ -291,6 +292,8 @@ You’ll find:
 | version()                                             | Get current version of the index              |
 | get_info()                                            | Retrieve detailed information about the index |
 | validate()                                            | Validate the integrity of the index           |
+| py_set_metadata_schema(schema)                        | Set metadata schema from Python               |
+| py_add_with_metadata(data, ids, metadata)             | Add vectors, IDs, and metadata from Python    |
 
 ### Utility Functions
 
