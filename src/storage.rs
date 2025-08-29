@@ -67,5 +67,7 @@ pub fn load_index(path: &str) -> Result<AnnIndex, RustAnnError> {
         metrics: None,
         boolean_filters: Mutex::new(HashMap::new()),
         version: Arc::new(AtomicU64::new(serialized.version)),
+        metadata_schema: None,
+        metadata_columns: None,
     })
 }
