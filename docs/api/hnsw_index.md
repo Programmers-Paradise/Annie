@@ -105,6 +105,10 @@ The `HnswIndex` class now supports additional distance metrics, including Hammin
 
 The library now uses the `thiserror` crate for improved error handling. This change enhances the clarity and consistency of error messages throughout the API. Users should be aware of potential changes in error types and messages when upgrading to this version.
 
+## Serialization and Deserialization
+
+The library uses the `serde` crate for serialization and deserialization, which has been updated to version `1.0.226`. This update ensures compatibility with the latest features and improvements in the `serde` ecosystem. Users should verify that their serialized data is compatible with this version.
+
 ## Example
 ```python
 import numpy as np
