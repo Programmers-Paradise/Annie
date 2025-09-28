@@ -15,6 +15,7 @@ use crate::metrics::Distance;
 use crate::errors::RustAnnError;
 use crate::filters::Filter;
 use crate::monitoring::MetricsCollector;
+use crate::path_validation::validate_path_secure;
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum MetadataType {
     Int,
@@ -677,11 +678,13 @@ impl AnnIndex {
     Ok((ids, dists))
     }
 
+    /// Secure path validation using canonicalization and allowlist
+    /// 
+    /// Replaces the vulnerable simple string check with robust path validation
+    /// that prevents directory traversal attacks through multiple bypass techniques.
     fn validate_path(path: &str) -> PyResult<()> {
-        if path.contains("..") { 
-            return Err(RustAnnError::py_err("InvalidPath", "Path must not contain traversal sequences")); 
-        }
-        Ok(())
+        // Use the secure path validation module
+        validate_path_secure(path).map(|_| ())
     }
 }
 
