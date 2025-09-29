@@ -21,7 +21,7 @@ use crate::py_index::PyIndex;
 use pyo3::prelude::*;
 use numpy::{PyReadonlyArray1, PyReadonlyArray2,PyUntypedArrayMethods,PyArrayDescrMethods};
 use crate::backend::AnnBackend;
-use crate::index::AnnIndex;
+use crate::index::{AnnIndex, MetadataType, MetadataField, MetadataValue};
 use crate::metrics::Distance;
 use crate::concurrency::ThreadSafeAnnIndex;
 use crate::hnsw_index::HnswIndex;
@@ -170,6 +170,9 @@ fn rust_annie(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     
     m.add_class::<AnnIndex>()?;
     m.add_class::<Distance>()?;
+    m.add_class::<MetadataType>()?;
+    m.add_class::<MetadataField>()?;
+    m.add_class::<MetadataValue>()?;
     m.add_class::<ThreadSafeAnnIndex>()?;
     m.add_class::<PyHnswIndex>()?;
     m.add_class::<PyIndex>()?;
