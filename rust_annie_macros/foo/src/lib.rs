@@ -116,9 +116,7 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             #[staticmethod]
             fn load(path: String) -> pyo3::PyResult<Self> {
-                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    return Err(pyo3::exceptions::PyValueError::new_err("Invalid file path"));
-                }
+                Self::validate_path(&path)?;
                 match #name::load(&path) {
                     Ok(inner) => Ok(#py_name { inner }),
                     Err(e) => Err(pyo3::exceptions::PyIOError::new_err(e.to_string())),
@@ -126,9 +124,37 @@ pub fn py_annindex(attr: TokenStream, item: TokenStream) -> TokenStream {
             }
 
             fn validate_path(path: &str) -> PyResult<()> {
-                if path.contains("..") || path.starts_with('/') || path.starts_with("\\") {
-                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Invalid file path"));
+                // Comprehensive path validation to prevent directory traversal
+                
+                // Check for null bytes and control characters
+                if path.contains('\0') || path.chars().any(|c| c.is_control() && c != '\t' && c != '\n' && c != '\r') {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Path contains invalid characters"));
                 }
+
+                // Check for dangerous patterns (case-insensitive)
+                let path_lower = path.to_lowercase();
+                let dangerous_patterns = [
+                    "..", "/etc/", "\\windows\\", "c:\\", "proc/", "dev/", 
+                    "%2e%2e", "%2f", "%5c", "..%2f", "..\\", ".%2e", 
+                    "%252e", "%252f", "%255c"
+                ];
+                
+                for pattern in &dangerous_patterns {
+                    if path_lower.contains(pattern) {
+                        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Path contains potentially dangerous sequences"));
+                    }
+                }
+
+                // Reject absolute paths
+                if path.starts_with('/') || path.starts_with("\\") || (path.len() > 2 && path.chars().nth(1) == Some(':')) {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Absolute paths are not allowed"));
+                }
+
+                // Additional checks for common bypass techniques
+                if path.contains("....") || path.contains("..\\") || path.contains("../") {
+                    return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("Path traversal sequences detected"));
+                }
+
                 Ok(())
             }
         }

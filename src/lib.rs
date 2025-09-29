@@ -11,6 +11,7 @@ mod index_enum;
 mod filters;
 pub mod distance_registry;
 pub mod monitoring;
+pub mod path_validation;
 
 // Add GPU module
 #[cfg(any(feature = "cuda", feature = "rocm"))]

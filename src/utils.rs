@@ -1,5 +1,6 @@
 use crate::metrics::Distance;
 use crate::distance_registry::get_distance_function;
+use crate::path_validation::validate_path_secure;
 
 pub fn compute_distances_with_ids(
     entries: &[(i64, Vec<f32>, f32)],
@@ -92,14 +93,15 @@ pub fn compute_distances_with_ids(
     (ids, dists)
 }
 
+/// Legacy validate_path function that now uses secure validation
+/// 
+/// This function has been updated to use the secure path validation
+/// to prevent directory traversal attacks.
 pub fn validate_path(path: &str) -> Result<String, &'static str> {
-    if path.contains("..") {
-        return Err("Path must not contain traversal sequences");
+    match validate_path_secure(path) {
+        Ok(path_buf) => Ok(path_buf.to_string_lossy().to_string()),
+        Err(_) => Err("Path validation failed - potentially unsafe path"),
     }
-    if path.contains('/') || path.contains('\\') {
-        return Err("Path must not contain directory separators");
-    }
-    Ok(path.to_string())
 }
 
 fn dot(a: &[f32], b: &[f32]) -> f32 {

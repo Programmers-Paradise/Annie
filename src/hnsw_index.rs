@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use hnsw_rs::prelude::*;
 use crate::backend::AnnBackend;
 use crate::metrics::Distance;
-use crate::utils::validate_path;
+use crate::path_validation::validate_path_secure;
 use crate::errors::RustAnnError;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -193,7 +193,7 @@ impl AnnBackend for HnswIndex {
     }
 
     fn save(&self, path: &str) {
-        let safe_path = validate_path(path).expect("Invalid or unsafe file path");
+        let safe_path = validate_path_secure(path).expect("Invalid or unsafe file path");
 
         let data = HnswIndexData {
             dims: self.dims,
@@ -208,7 +208,7 @@ impl AnnBackend for HnswIndex {
     }
 
     fn load(path: &str) -> Self {
-        let safe_path = validate_path(path).expect("Invalid or unsafe file path");
+        let safe_path = validate_path_secure(path).expect("Invalid or unsafe file path");
 
         let file = File::open(&safe_path).expect("Failed to open file");
         let reader = BufReader::new(file);
