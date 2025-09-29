@@ -5,6 +5,7 @@ use lazy_static::lazy_static;
 use std::sync::{Arc, Mutex};
 use half::f16;
 use std::convert::TryInto;
+use bytemuck::{cast_slice, Pod, Zeroable};
 
 // Global memory pool with thread-safe access
 lazy_static! {
@@ -138,65 +139,52 @@ fn convert_data(
     corpus: &[f32],
     precision: Precision,
 ) -> Result<(Vec<u8>, Vec<u8>), GpuError> {
+    // Validate input arrays are not empty
+    if queries.is_empty() || corpus.is_empty() {
+        return Err(GpuError::InvalidInput("Input arrays cannot be empty".to_string()));
+    }
+
     match precision {
         Precision::Fp32 => {
-            // No conversion needed, just reinterpret as bytes
-            let queries_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    queries.as_ptr() as *const u8,
-                    queries.len() * std::mem::size_of::<f32>()
-                ).to_vec()
-            };
-            let corpus_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    corpus.as_ptr() as *const u8,
-                    corpus.len() * std::mem::size_of::<f32>()
-                ).to_vec()
-            };
+            // Use safe bytemuck conversion instead of unsafe raw parts
+            let queries_bytes = cast_slice::<f32, u8>(queries).to_vec();
+            let corpus_bytes = cast_slice::<f32, u8>(corpus).to_vec();
             Ok((queries_bytes, corpus_bytes))
         }
         Precision::Fp16 => {
-            // Convert to f16
+            // Convert to f16 with bounds checking
             let queries_f16: Vec<f16> = queries.iter().map(|&x| f16::from_f32(x)).collect();
             let corpus_f16: Vec<f16> = corpus.iter().map(|&x| f16::from_f32(x)).collect();
             
-            // Reinterpret as bytes
-            let queries_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    queries_f16.as_ptr() as *const u8,
-                    queries_f16.len() * std::mem::size_of::<f16>()
-                ).to_vec()
-            };
-            let corpus_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    corpus_f16.as_ptr() as *const u8,
-                    corpus_f16.len() * std::mem::size_of::<f16>()
-                ).to_vec()
-            };
+            // Use safe bytemuck conversion instead of unsafe raw parts
+            let queries_bytes = cast_slice::<f16, u8>(&queries_f16).to_vec();
+            let corpus_bytes = cast_slice::<f16, u8>(&corpus_f16).to_vec();
             Ok((queries_bytes, corpus_bytes))
         }
         Precision::Int8 => {
-            // Convert to int8 with scaling
+            // Convert to int8 with scaling and clamping
             let queries_i8: Vec<i8> = queries.iter()
-                .map(|&x| (x * 127.0).clamp(-128.0, 127.0) as i8)
+                .map(|&x| {
+                    // Add bounds checking for safety
+                    if !x.is_finite() {
+                        return 0i8; // Handle NaN/infinite values safely
+                    }
+                    (x * 127.0).clamp(-128.0, 127.0) as i8
+                })
                 .collect();
             let corpus_i8: Vec<i8> = corpus.iter()
-                .map(|&x| (x * 127.0).clamp(-128.0, 127.0) as i8)
+                .map(|&x| {
+                    // Add bounds checking for safety
+                    if !x.is_finite() {
+                        return 0i8; // Handle NaN/infinite values safely
+                    }
+                    (x * 127.0).clamp(-128.0, 127.0) as i8
+                })
                 .collect();
             
-            // Reinterpret as bytes
-            let queries_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    queries_i8.as_ptr() as *const u8,
-                    queries_i8.len()
-                ).to_vec()
-            };
-            let corpus_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    corpus_i8.as_ptr() as *const u8,
-                    corpus_i8.len()
-                ).to_vec()
-            };
+            // Use safe bytemuck conversion instead of unsafe raw parts
+            let queries_bytes = cast_slice::<i8, u8>(&queries_i8).to_vec();
+            let corpus_bytes = cast_slice::<i8, u8>(&corpus_i8).to_vec();
             Ok((queries_bytes, corpus_bytes))
         }
     }
@@ -216,6 +204,15 @@ pub fn distribute_data(
     dim: usize,
     devices: &[usize],
 ) -> Result<Vec<(usize, Vec<u8>)>, GpuError> {
+    // Validate inputs
+    if data.is_empty() || devices.is_empty() {
+        return Err(GpuError::InvalidInput("Data and devices cannot be empty".to_string()));
+    }
+    
+    if data.len() % dim != 0 {
+        return Err(GpuError::InvalidInput("Data length must be divisible by dimension".to_string()));
+    }
+
     let total = data.len() / dim;
     let per_device = total / devices.len();
     let mut distributed = Vec::new();
@@ -228,13 +225,14 @@ pub fn distribute_data(
             (i + 1) * per_device * dim
         };
         
+        // Validate bounds
+        if start >= data.len() || end > data.len() {
+            return Err(GpuError::InvalidInput("Invalid data chunk bounds".to_string()));
+        }
+        
         let device_data = &data[start..end];
-        let bytes = unsafe {
-            std::slice::from_raw_parts(
-                device_data.as_ptr() as *const u8,
-                device_data.len() * std::mem::size_of::<f32>()
-            ).to_vec()
-        };
+        // Use safe bytemuck conversion instead of unsafe raw parts
+        let bytes = cast_slice::<f32, u8>(device_data).to_vec();
         
         distributed.push((device_id, bytes));
     }
