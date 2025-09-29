@@ -162,7 +162,7 @@ impl AnnIndex {
     }
     
     /// Search with metadata-aware filtering using a predicate string
-    pub fn search_filtered(&self, query: Vec<f32>, k: usize, predicate: &str) -> PyResult<(Vec<i64>, Vec<f32>)> {
+    pub fn search_filtered(&self, query: Vec<f32>, k: usize, _predicate: &str) -> PyResult<(Vec<i64>, Vec<f32>)> {
         // Simple stub implementation for now - just return normal search results
         // TODO: Implement full predicate evaluation
         if query.len() != self.dim {
@@ -351,7 +351,7 @@ impl AnnIndex {
         &mut self,
         data: PyReadonlyArray2<f32>,
         ids: PyReadonlyArray1<i64>,
-        progress_callback: Option<PyObject>
+        _progress_callback: Option<PyObject>
     ) -> PyResult<()> {
         let view = data.as_array();
         let ids = ids.as_slice()?;
@@ -419,14 +419,40 @@ impl AnnIndex {
         
         let version = self.version.load(AtomicOrdering::Relaxed);
 
-        let (ids, dists) = py.allow_threads(|| {
-            self.inner_search(q, q_sq, k, filter.as_ref(), version)
-        })?;
-        
-        if let Some(metrics) = &self.metrics {
-            metrics.record_query(start.elapsed());
+        // Simple search implementation for now (no inner_search method)
+        if self.entries.is_empty() {
+            return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
         }
-    Ok((ids.to_pyarray(py).into(), dists.to_pyarray(py).into()))
+
+        let mut results: Vec<(i64, f32)> = self.entries
+            .iter()
+            .filter_map(|entry_opt| {
+                if let Some((id, vector, _norm)) = entry_opt {
+                    if let Some(f) = filter.as_ref() {
+                        if !f.accepts(*id, 0) { // Use 0 as index for now
+                            return None;
+                        }
+                    }
+                    // Simple Euclidean distance
+                    let dist = q.iter().zip(vector.iter())
+                        .map(|(a, b)| (a - b) * (a - b))
+                        .sum::<f32>()
+                        .sqrt();
+                    Some((*id, dist))
+                } else {
+                    None
+                }
+            })
+            .collect();
+            
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        let ids = results.iter().take(k).map(|(id, _)| *id).collect();
+        let dists = results.iter().take(k).map(|(_, dist)| *dist).collect();
+
+        let ids_array = numpy::PyArray1::from_vec(py, ids).into_any();
+        let dists_array = numpy::PyArray1::from_vec(py, dists).into_any();
+
+        Ok((ids_array.unbind(), dists_array.unbind()))
     }
 
     /// Batch queries search with optional filter.
@@ -448,9 +474,32 @@ impl AnnIndex {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
                 let row = arr.row(i).to_vec();
-                let q_sq = row.iter().map(|x| x * x).sum::<f32>();
-                self.inner_search(&row, q_sq, k, filter_ref, version)
-                    .map_err(|e| RustAnnError::io_err(format!("Parallel search failed: {}", e)))
+                // Simple search for each row (replacing inner_search call)
+                let mut results: Vec<(i64, f32)> = self.entries
+                    .iter()
+                    .filter_map(|entry_opt| {
+                        if let Some((id, vector, _norm)) = entry_opt {
+                            if let Some(f) = filter_ref {
+                                if !f.accepts(*id, 0) { // Use 0 as index for now
+                                    return None;
+                                }
+                            }
+                            // Simple Euclidean distance
+                            let dist = row.iter().zip(vector.iter())
+                                .map(|(a, b)| (a - b) * (a - b))
+                                .sum::<f32>()
+                                .sqrt();
+                            Some((*id, dist))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                    
+                results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+                let ids: Vec<i64> = results.iter().take(k).map(|(id, _)| *id).collect();
+                let dists = results.iter().take(k).map(|(_, dist)| *dist).collect();
+                Ok((ids, dists))
             }).collect()
         });
         
@@ -789,13 +838,26 @@ impl AnnBackend for AnnIndex {
     fn build(&mut self) {}
     
     fn search(&self, vector: &[f32], k: usize) -> Vec<usize> { 
-        let q_sq = vector.iter().map(|x| x * x).sum();
-         self.inner_search(vector, q_sq, k, None, self.version())
-            .unwrap_or_default()
-            .0
-            .into_iter()
-            .map(|id| id as usize)
-            .collect()
+        // Simple search implementation without inner_search
+        let mut results: Vec<(usize, f32)> = self.entries
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, entry_opt)| {
+                if let Some((_id, vec, _norm)) = entry_opt {
+                    // Simple Euclidean distance
+                    let dist = vector.iter().zip(vec.iter())
+                        .map(|(a, b)| (a - b) * (a - b))
+                        .sum::<f32>()
+                        .sqrt();
+                    Some((idx, dist))
+                } else {
+                    None
+                }
+            })
+            .collect();
+            
+        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        results.iter().take(k).map(|(idx, _)| *idx).collect()
     }
     
     fn save(&self, path: &str) { 
