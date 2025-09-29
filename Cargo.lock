@@ -181,6 +181,20 @@ name = "bytemuck"
 version = "1.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3995eaeebcdf32f91f980d360f78732ddc061097ab4e39991ae7a6ace9194677"
+dependencies = [
+ "bytemuck_derive",
+]
+
+[[package]]
+name = "bytemuck_derive"
+version = "1.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f154e572231cb6ba2bd1176980827e3d5dc04cc183a75dea38109fbdd672d29"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
 
 [[package]]
 name = "byteorder"
@@ -543,6 +557,7 @@ version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "459196ed295495a68f7d7fe1d84f6c4b7ff0e21fe3017b2f283c6fac3ad803c9"
 dependencies = [
+ "bytemuck",
  "cfg-if",
  "crunchy",
 ]
@@ -1250,8 +1265,10 @@ version = "0.2.4"
 dependencies = [
  "bincode",
  "bit-vec",
+ "bytemuck",
  "criterion",
  "cust",
+ "half",
  "hip-rs",
  "hnsw_rs",
  "lazy_static",
