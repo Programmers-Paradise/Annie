@@ -107,7 +107,7 @@ The library now uses the `thiserror` crate for improved error handling. This cha
 
 ## Serialization and Deserialization
 
-The library uses the `serde` crate for serialization and deserialization, which has been updated to version `1.0.226`. This update ensures compatibility with the latest features and improvements in the `serde` ecosystem. Users should verify that their serialized data is compatible with this version.
+The library uses the `serde` crate for serialization and deserialization, which has been updated to version `1.0.228`. This update ensures compatibility with the latest features and improvements in the `serde` ecosystem. Users should verify that their serialized data is compatible with this version.
 
 ## Example
 ```python
