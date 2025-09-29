@@ -16,6 +16,7 @@ use crate::errors::RustAnnError;
 use crate::filters::Filter;
 use crate::monitoring::MetricsCollector;
 use crate::path_validation::validate_path_secure;
+#[pyclass]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum MetadataType {
     Int,
@@ -25,8 +26,30 @@ pub enum MetadataType {
     Timestamp,
 }
 
+#[pymethods]
+impl MetadataType {
+    #[new]
+    fn new() -> Self {
+        MetadataType::String // Default
+    }
+}
 
+#[pyclass]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct MetadataField {
+    #[pyo3(get, set)]
+    pub field_type: MetadataType,
+}
 
+#[pymethods]
+impl MetadataField {
+    #[new]
+    fn new(field_type: MetadataType) -> Self {
+        MetadataField { field_type }
+    }
+}
+
+#[pyclass]
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum MetadataValue {
     Int(i64),
@@ -34,6 +57,14 @@ pub enum MetadataValue {
     String(String),
     Tags(Vec<String>),
     Timestamp(i64), // Unix timestamp
+}
+
+#[pymethods]
+impl MetadataValue {
+    #[new]
+    fn new() -> Self {
+        MetadataValue::String(String::new()) // Default
+    }
 }
 
 #[pyclass]
@@ -66,16 +97,63 @@ pub struct AnnIndex {
 
 #[pymethods]
 impl AnnIndex {
-    /// Set metadata schema from Python (dict: str -> MetadataType)
-    pub fn py_set_metadata_schema(&mut self, _schema: &pyo3::PyAny) -> PyResult<()> {
-        // Stub: set_metadata_schema not implemented
+    /// Set metadata schema from Python (dict: str -> MetadataField)
+    pub fn py_set_metadata_schema(&mut self, schema: Bound<'_, pyo3::PyAny>) -> PyResult<()> {
+        use pyo3::types::PyDict;
+        
+        let dict = schema.downcast::<PyDict>()?;
+        
+        let mut schema_map = HashMap::new();
+        for (key, value) in dict.iter() {
+            let field_name: String = key.extract()?;
+            let metadata_field: MetadataField = value.extract()?;
+            schema_map.insert(field_name, metadata_field.field_type);
+        }
+        
+        self.metadata_schema = Some(schema_map);
         Ok(())
-}
+    }
 
     /// Add vectors, IDs, and metadata from Python
-    pub fn py_add_with_metadata(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: &pyo3::PyAny) -> PyResult<()> {
-        // Stub: parse metadata from PyAny not implemented
-        Ok(())
+    pub fn py_add_with_metadata(&mut self, py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Bound<'_, pyo3::PyAny>) -> PyResult<()> {
+        use pyo3::types::PyList;
+        
+        // Parse metadata list of dictionaries
+        let metadata_list = metadata.downcast::<PyList>()?;
+        
+        let mut parsed_metadata = Vec::new();
+        for item in metadata_list.iter() {
+            let mut meta_dict = HashMap::new();
+            let dict = item.downcast::<pyo3::types::PyDict>()?;
+            
+            for (key, value) in dict.iter() {
+                let field_name: String = key.extract()?;
+                let metadata_value = self.parse_metadata_value(&value)?;
+                meta_dict.insert(field_name, metadata_value);
+            }
+            parsed_metadata.push(meta_dict);
+        }
+        
+        self.add_with_metadata_internal(py, data, ids, parsed_metadata)
+    }
+    
+    /// Helper method to parse Python values into MetadataValue
+    fn parse_metadata_value(&self, value: &Bound<'_, pyo3::PyAny>) -> PyResult<MetadataValue> {
+        // Try extracting different types
+        if let Ok(int_val) = value.extract::<i64>() {
+            return Ok(MetadataValue::Int(int_val));
+        }
+        if let Ok(float_val) = value.extract::<f64>() {
+            return Ok(MetadataValue::Float(float_val));
+        }
+        if let Ok(string_val) = value.extract::<String>() {
+            return Ok(MetadataValue::String(string_val));
+        }
+        if let Ok(list_val) = value.extract::<Vec<String>>() {
+            return Ok(MetadataValue::Tags(list_val));
+        }
+        
+        Err(pyo3::exceptions::PyTypeError::new_err("Unsupported metadata value type"))
     }
 
     /// Search with metadata-aware filtering from Python
@@ -107,19 +185,316 @@ impl AnnIndex {
         Ok((ids, dists))
     }
 
-    /// Evaluate predicate string against metadata columns (stub: returns all true)
-    fn evaluate_predicate(&self, _predicate: &str) -> PyResult<Vec<bool>> {
+    /// Evaluate predicate string against metadata columns
+    fn evaluate_predicate(&self, predicate: &str) -> PyResult<Vec<bool>> {
         let n = self.entries.len();
         if self.metadata_columns.is_none() {
             return Ok(vec![true; n]);
         }
+        
         let columns = self.metadata_columns.as_ref().unwrap();
-        // Only support simple predicates: field==value, field!=value, field>value, field<value, AND, OR
-        // Example: country=="IN" AND score>0.8
-        let mut mask = vec![true; n];
-        let clauses: Vec<&str> = _predicate.split("AND").map(|s| s.trim()).collect();
-    // Stub: always return all true for now
-    Ok(vec![true; n])
+        
+        // Parse and evaluate simple predicates for now
+        // Support format: field==value, field!=value, field>value, field<value, AND, OR
+        let clauses: Vec<&str> = predicate.split(" AND ").collect();
+        let mut final_mask = vec![true; n];
+        
+        for clause in clauses {
+            let clause = clause.trim();
+            let clause_mask = self.evaluate_single_clause(clause, columns, n)?;
+            
+            // AND operation: both conditions must be true
+            for i in 0..n {
+                final_mask[i] = final_mask[i] && clause_mask[i];
+            }
+        }
+        
+        Ok(final_mask)
+    }
+    
+    /// Evaluate a single predicate clause
+    fn evaluate_single_clause(&self, clause: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        // Handle OR clauses within a single clause
+        if clause.contains(" OR ") {
+            let or_clauses: Vec<&str> = clause.split(" OR ").collect();
+            let mut or_mask = vec![false; n];
+            
+            for or_clause in or_clauses {
+                let clause_mask = self.parse_single_predicate(or_clause.trim(), columns, n)?;
+                for i in 0..n {
+                    or_mask[i] = or_mask[i] || clause_mask[i];
+                }
+            }
+            return Ok(or_mask);
+        }
+        
+        self.parse_single_predicate(clause, columns, n)
+    }
+    
+    /// Parse and evaluate a single atomic predicate (field op value)
+    fn parse_single_predicate(&self, predicate: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        // Parse operators: ==, !=, >, <, IN, CONTAINS
+        if let Some(pos) = predicate.find("==") {
+            let field = predicate[..pos].trim();
+            let value = predicate[pos+2..].trim().trim_matches('"');
+            return self.evaluate_equals(field, value, columns, n);
+        }
+        
+        if let Some(pos) = predicate.find("!=") {
+            let field = predicate[..pos].trim();
+            let value = predicate[pos+2..].trim().trim_matches('"');
+            let eq_mask = self.evaluate_equals(field, value, columns, n)?;
+            return Ok(eq_mask.into_iter().map(|x| !x).collect());
+        }
+        
+        if let Some(pos) = predicate.find(">=") {
+            let field = predicate[..pos].trim();
+            let value = predicate[pos+2..].trim();
+            return self.evaluate_gte(field, value, columns, n);
+        }
+        
+        if let Some(pos) = predicate.find("<=") {
+            let field = predicate[..pos].trim();
+            let value = predicate[pos+2..].trim();
+            return self.evaluate_lte(field, value, columns, n);
+        }
+        
+        if let Some(pos) = predicate.find(">") {
+            let field = predicate[..pos].trim();
+            let value = predicate[pos+1..].trim();
+            return self.evaluate_gt(field, value, columns, n);
+        }
+        
+        if let Some(pos) = predicate.find("<") {
+            let field = predicate[..pos].trim();
+            let value = predicate[pos+1..].trim();
+            return self.evaluate_lt(field, value, columns, n);
+        }
+        
+        if predicate.contains(" IN ") {
+            return self.evaluate_in_predicate(predicate, columns, n);
+        }
+        
+        if predicate.contains(" CONTAINS ") {
+            return self.evaluate_contains_predicate(predicate, columns, n);
+        }
+        
+        Err(RustAnnError::py_err("Invalid Predicate", format!("Cannot parse predicate: {}", predicate)))
+    }
+    
+    /// Evaluate field == value
+    fn evaluate_equals(&self, field: &str, value: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::String(s) => s == value,
+                    MetadataValue::Int(int_val) => {
+                        if let Ok(target_int) = value.parse::<i64>() {
+                            *int_val == target_int
+                        } else { false }
+                    },
+                    MetadataValue::Float(float_val) => {
+                        if let Ok(target_float) = value.parse::<f64>() {
+                            (*float_val - target_float).abs() < f64::EPSILON
+                        } else { false }
+                    },
+                    MetadataValue::Timestamp(ts) => {
+                        if let Ok(target_ts) = value.parse::<i64>() {
+                            *ts == target_ts
+                        } else { false }
+                    },
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
+    }
+    
+    /// Evaluate field > value (numeric only)
+    fn evaluate_gt(&self, field: &str, value: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::Int(int_val) => {
+                        if let Ok(target_int) = value.parse::<i64>() {
+                            *int_val > target_int
+                        } else { false }
+                    },
+                    MetadataValue::Float(float_val) => {
+                        if let Ok(target_float) = value.parse::<f64>() {
+                            *float_val > target_float
+                        } else { false }
+                    },
+                    MetadataValue::Timestamp(ts) => {
+                        if let Ok(target_ts) = value.parse::<i64>() {
+                            *ts > target_ts
+                        } else { false }
+                    },
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
+    }
+    
+    /// Evaluate field < value (numeric only) 
+    fn evaluate_lt(&self, field: &str, value: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::Int(int_val) => {
+                        if let Ok(target_int) = value.parse::<i64>() {
+                            *int_val < target_int
+                        } else { false }
+                    },
+                    MetadataValue::Float(float_val) => {
+                        if let Ok(target_float) = value.parse::<f64>() {
+                            *float_val < target_float
+                        } else { false }
+                    },
+                    MetadataValue::Timestamp(ts) => {
+                        if let Ok(target_ts) = value.parse::<i64>() {
+                            *ts < target_ts
+                        } else { false }
+                    },
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
+    }
+    
+    /// Evaluate field >= value (numeric only)
+    fn evaluate_gte(&self, field: &str, value: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::Int(int_val) => {
+                        if let Ok(target_int) = value.parse::<i64>() {
+                            *int_val >= target_int
+                        } else { false }
+                    },
+                    MetadataValue::Float(float_val) => {
+                        if let Ok(target_float) = value.parse::<f64>() {
+                            *float_val >= target_float
+                        } else { false }
+                    },
+                    MetadataValue::Timestamp(ts) => {
+                        if let Ok(target_ts) = value.parse::<i64>() {
+                            *ts >= target_ts
+                        } else { false }
+                    },
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
+    }
+    
+    /// Evaluate field <= value (numeric only)
+    fn evaluate_lte(&self, field: &str, value: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::Int(int_val) => {
+                        if let Ok(target_int) = value.parse::<i64>() {
+                            *int_val <= target_int
+                        } else { false }
+                    },
+                    MetadataValue::Float(float_val) => {
+                        if let Ok(target_float) = value.parse::<f64>() {
+                            *float_val <= target_float
+                        } else { false }
+                    },
+                    MetadataValue::Timestamp(ts) => {
+                        if let Ok(target_ts) = value.parse::<i64>() {
+                            *ts <= target_ts
+                        } else { false }
+                    },
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
+    }
+    
+    /// Evaluate field IN [val1, val2, ...]
+    fn evaluate_in_predicate(&self, predicate: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        let parts: Vec<&str> = predicate.split(" IN ").collect();
+        if parts.len() != 2 {
+            return Err(RustAnnError::py_err("Invalid IN Predicate", "IN predicate must have format 'field IN [values]'"));
+        }
+        
+        let field = parts[0].trim();
+        let values_str = parts[1].trim().trim_start_matches('[').trim_end_matches(']');
+        let target_values: Vec<&str> = values_str.split(',').map(|s| s.trim().trim_matches('"')).collect();
+        
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::String(s) => target_values.contains(&s.as_str()),
+                    MetadataValue::Int(int_val) => {
+                        target_values.iter().any(|&v| {
+                            if let Ok(target_int) = v.parse::<i64>() {
+                                *int_val == target_int
+                            } else { false }
+                        })
+                    },
+                    MetadataValue::Float(float_val) => {
+                        target_values.iter().any(|&v| {
+                            if let Ok(target_float) = v.parse::<f64>() {
+                                (*float_val - target_float).abs() < f64::EPSILON
+                            } else { false }
+                        })
+                    },
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
+    }
+    
+    /// Evaluate field CONTAINS value (for Tags only)
+    fn evaluate_contains_predicate(&self, predicate: &str, columns: &HashMap<String, Vec<MetadataValue>>, n: usize) -> PyResult<Vec<bool>> {
+        let parts: Vec<&str> = predicate.split(" CONTAINS ").collect();
+        if parts.len() != 2 {
+            return Err(RustAnnError::py_err("Invalid CONTAINS Predicate", "CONTAINS predicate must have format 'field CONTAINS value'"));
+        }
+        
+        let field = parts[0].trim();
+        let target_value = parts[1].trim().trim_matches('"');
+        
+        if let Some(column) = columns.get(field) {
+            let mut mask = vec![false; n];
+            for i in 0..n.min(column.len()) {
+                mask[i] = match &column[i] {
+                    MetadataValue::Tags(tags) => tags.contains(&target_value.to_string()),
+                    MetadataValue::String(s) => s.contains(target_value),
+                    _ => false,
+                };
+            }
+            Ok(mask)
+        } else {
+            Err(RustAnnError::py_err("Unknown Field", format!("Field '{}' not found in metadata", field)))
+        }
     }
     #[new]
     /// Create a new index for unit-variant metrics.
@@ -144,6 +519,11 @@ impl AnnIndex {
             metadata_schema: None,
             metadata_columns: None,
         })
+    }
+
+    #[staticmethod]
+    /// Create a new index with Minkowski-p distance.
+    pub fn new_minkowski(dim: usize, p: f32) -> PyResult<Self> {
         if dim == 0 {
             return Err(RustAnnError::py_err("Invalid Dimension", "Dimension must be > 0"));
         }
@@ -198,7 +578,7 @@ impl AnnIndex {
     }
 
     /// Add vectors, IDs, and metadata in batch.
-    pub fn add_with_metadata(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Vec<HashMap<String, MetadataValue>>) -> PyResult<()> {
+    pub fn add_with_metadata_internal(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Vec<HashMap<String, MetadataValue>>) -> PyResult<()> {
         let ids_slice = ids.as_slice()?;
         if ids_slice.iter().any(|&id| id < 0) {
             return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
@@ -363,7 +743,6 @@ impl AnnIndex {
         let arr = data.as_array();
         let n = arr.nrows();
         if arr.ncols() != self.dim {
-    }
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
@@ -512,10 +891,8 @@ impl AnnIndex {
         let filters = self.boolean_filters.lock()
             .map_err(|_| RustAnnError::py_err("LockError", "Failed to acquire boolean filters lock"))?;
         Ok(filters.get(name).map(|bv| bv.iter().collect()))
-        }
+    }
 
-    // Close previous impl block before starting a new one
-    impl AnnIndex {
     fn should_compact(&self) -> bool {
         let total = self.entries.len();
         total > 0 && (self.deleted_count as f32 / total as f32) > self.max_deleted_ratio
