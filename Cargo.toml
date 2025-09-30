@@ -44,7 +44,3 @@ rand = "0.9"
 [[bench]]
 name = "gpu_benchmark"
 harness = false
-
-[[bin]]
-name = "memory_safety_demo"
-path = "bin/memory_safety_demo.rs"
