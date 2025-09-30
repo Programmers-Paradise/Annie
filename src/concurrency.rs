@@ -18,7 +18,6 @@ use numpy::{PyReadonlyArray1, PyReadonlyArray2};
 
 use crate::index::AnnIndex;
 use crate::metrics::Distance;
-use crate::errors::RustAnnError;
 
 /// A thread-safe, Python-visible wrapper around [`AnnIndex`].
 #[pyclass]
@@ -56,12 +55,12 @@ impl ThreadSafeAnnIndex {
 
     pub fn update(&self, _py: Python, id: i64, vector: Vec<f32>) -> PyResult<()> {
     let mut guard = get_write_lock(&self.inner)?;
-        guard.update(id, vector).map_err(|e| RustAnnError::py_err("Update Error", format!("Failed to update: {}", e)))
+        guard.update(id, vector)
     }
 
     pub fn compact(&self, _py: Python) -> PyResult<()> {
     let mut guard = get_write_lock(&self.inner)?;
-        guard.compact().map_err(|e| RustAnnError::py_err("Compact Error", format!("Failed to compact: {}", e)))
+        guard.compact()
     }
     
     pub fn version(&self, _py: Python) -> u64 {

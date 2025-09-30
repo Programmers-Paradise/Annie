@@ -1,6 +1,6 @@
 use pyo3::prelude::*;
-use numpy::{PyReadonlyArray1, PyReadonlyArray2, IntoPyArray, ToPyArray};
-use ndarray::{Array2, s};
+use numpy::{PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
+use ndarray::Array2;
 use rayon::prelude::*;
 use serde::{Serialize, Deserialize};
 use std::sync::{Arc, Mutex};
@@ -414,10 +414,10 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
         }
         let q = query.as_slice()?;
-        let q_sq = q.iter().map(|x| x * x).sum::<f32>();
-        let start = Instant::now();
+        let _q_sq = q.iter().map(|x| x * x).sum::<f32>();
+        let _start = Instant::now();
         
-        let version = self.version.load(AtomicOrdering::Relaxed);
+        let _version = self.version.load(AtomicOrdering::Relaxed);
 
         // Simple search implementation for now (no inner_search method)
         if self.entries.is_empty() {
@@ -469,7 +469,7 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
         }
         
-        let version = self.version.load(AtomicOrdering::Relaxed);
+        let _version = self.version.load(AtomicOrdering::Relaxed);
         let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
             let filter_ref = filter.as_ref();
             (0..n).into_par_iter().map(|i| {
@@ -498,7 +498,7 @@ impl AnnIndex {
                     
                 results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
                 let ids: Vec<i64> = results.iter().take(k).map(|(id, _)| *id).collect();
-                let dists = results.iter().take(k).map(|(_, dist)| *dist).collect();
+                let dists: Vec<f32> = results.iter().take(k).map(|(_, dist)| *dist).collect();
                 Ok((ids, dists))
             }).collect()
         });
@@ -546,6 +546,21 @@ impl AnnIndex {
     /// Current version
     pub fn version(&self) -> u64 {
         self.version.load(AtomicOrdering::Relaxed)
+    }
+
+    /// Remove entries by IDs (not yet implemented)
+    pub fn remove(&mut self, _ids: Vec<i64>) -> PyResult<()> {
+        Err(RustAnnError::py_err("NotImplemented", "Remove operation not yet implemented"))
+    }
+
+    /// Update an entry by ID (not yet implemented)
+    pub fn update(&mut self, _id: i64, _vector: Vec<f32>) -> PyResult<()> {
+        Err(RustAnnError::py_err("NotImplemented", "Update operation not yet implemented"))
+    }
+
+    /// Compact the index by removing deleted entries (not yet implemented)
+    pub fn compact(&mut self) -> PyResult<()> {
+        Err(RustAnnError::py_err("NotImplemented", "Compact operation not yet implemented"))
     }
 
     /// Vector dimension.
@@ -713,7 +728,10 @@ impl AnnIndex {
         Ok(())
     }
 
-    // Private method (not exposed to Python)
+}
+
+// Private methods implementation (not exposed to Python)
+impl AnnIndex {
     fn inner_search(
         &self,
         q: &[f32],

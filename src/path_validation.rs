@@ -4,8 +4,7 @@
 //! This module provides robust path validation using canonicalization
 //! and allowlist-based directory restrictions.
 
-use std::path::{Path, PathBuf};
-use std::fs;
+use std::path::PathBuf;
 use crate::errors::RustAnnError;
 use pyo3::PyResult;
 
@@ -249,7 +248,7 @@ mod tests {
     #[test]
     fn test_is_path_in_allowed_dirs() {
         let current_dir = std::env::current_dir().unwrap();
-        let allowed_path = current_dir.join("data").to_string_lossy().to_string();
+        let _allowed_path = current_dir.join("data").to_string_lossy().to_string();
         
         assert!(is_path_in_allowed_dirs(&current_dir.to_string_lossy()));
         // Other tests depend on file system state
