@@ -135,3 +135,5 @@ Typical results on V100:
 - INT8: 6ms @ 1M vectors (with quantization)
 
 This updated documentation reflects the changes in the GPU backend creation process, highlighting the new error handling mechanism and providing guidance on how to handle potential errors effectively. Additionally, it includes information on GPU error conditions and HIP kernel compilation to help users avoid common pitfalls when using GPU features.
+
+Note: The update to the "bytemuck" library version from 1.23 to 1.24 may introduce performance improvements or optimizations that could affect memory handling and data alignment in GPU operations. Users should review the "bytemuck" library's release notes for detailed changes and consider re-evaluating their performance benchmarks.
