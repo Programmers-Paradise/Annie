@@ -28,7 +28,7 @@ use crate::hnsw_index::HnswIndex;
 use crate::distance_registry::{register_metric, list_metrics, init_distance_registry};
 use crate::monitoring::PyMetricsCollector;
 use pyo3::Bound;
-use pyo3::types::{PyModule, PyList};
+use pyo3::types::PyModule;
 use crate::hnsw_index::HnswConfig;
 
 #[pyclass(name = "HnswConfig")]
