@@ -66,7 +66,10 @@ def benchmark(dataset: str = "medium", repeats: int = 50, batch_size: int = 1000
     mem_before = measure_memory()
     build_start = time.perf_counter()
     idx = AnnIndex(D, Distance.EUCLIDEAN)
-    idx.add(data, ids)
+    # Add in batches to respect allocator safety limits and reduce peak memory
+    for start in range(0, N, batch_size):
+        end = min(start + batch_size, N)
+        idx.add(data[start:end], ids[start:end])
     build_time = time.perf_counter() - build_start
     mem_after = measure_memory()
     
@@ -169,10 +172,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", choices=["small", "medium", "large"], default="medium")
     parser.add_argument("--repeats", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=10000)
     parser.add_argument("--output", type=str, required=True)
     args = parser.parse_args()
 
-    results = benchmark(args.dataset, args.repeats)
+    results = benchmark(args.dataset, args.repeats, args.batch_size)
     print(json.dumps(results, indent=2))
 
     out_dir = os.path.dirname(args.output)
