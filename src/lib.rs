@@ -189,8 +189,8 @@ fn rust_annie(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("Distance", distance)?;
 
     // Set __all__ for Python import *
-    let all = vec!["AnnIndex".to_string(), "Distance".to_string()];
-    let py_all = PyList::new(py, &all);
+    let all = vec!["AnnIndex", "Distance"];
+    let py_all = all.into_py(py);
     m.add("__all__", py_all)?;
 
     Ok(())
