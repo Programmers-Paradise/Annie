@@ -366,8 +366,8 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Excessive Allocation", format!("Attempted to add {} vectors, limit is {}", n, MAX_ROWS)));
         }
         let active_entries = self.entries.iter().filter(|e| e.is_some()).count();
-        if active_entries + n >= MAX_ROWS {
-            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would reach or exceed safe limit {}", MAX_ROWS)));
+        if active_entries + n > MAX_ROWS {
+            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would exceed safe limit {}", MAX_ROWS)));
         }
 
         // Check for duplicate IDs
