@@ -164,10 +164,10 @@ impl PyHnswIndex {
 }
 
 #[pymodule]
-fn rust_annie(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rust_annie(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Initialize the distance registry
     init_distance_registry();
-    
+
     m.add_class::<AnnIndex>()?;
     m.add_class::<Distance>()?;
     m.add_class::<MetadataType>()?;
@@ -180,5 +180,17 @@ fn rust_annie(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHnswConfig>()?;
     m.add_function(wrap_pyfunction!(register_metric, m)?)?;
     m.add_function(wrap_pyfunction!(list_metrics, m)?)?;
+
+    // Expose AnnIndex and Distance at the top level for import
+    let annindex = m.getattr("AnnIndex")?;
+    m.add("AnnIndex", annindex)?;
+    let distance = m.getattr("Distance")?;
+    m.add("Distance", distance)?;
+
+    // Set __all__ for Python import *
+    let all = vec!["AnnIndex", "Distance"];
+    let py_all = all.into_py(py);
+    m.add("__all__", py_all)?;
+
     Ok(())
 }
