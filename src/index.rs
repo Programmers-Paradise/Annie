@@ -6,7 +6,6 @@ use serde::{Serialize, Deserialize};
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::time::Instant;
 use bit_vec::BitVec;
 
 use crate::backend::AnnBackend;
