@@ -14,4 +14,4 @@ dynamic = ["version"]
 [tool.maturin]
 # Build as an extension module using the stable Python limited API (abi3),
 # so wheels don’t link against a specific libpython (required for musllinux).
-features = ["pyo3/extension-module", "pyo3/abi3-py38"]
+features = ["python-ext", "python-abi3", "pyo3-import-lib"]
