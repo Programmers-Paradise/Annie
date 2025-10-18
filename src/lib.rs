@@ -28,7 +28,7 @@ use crate::hnsw_index::HnswIndex;
 use crate::distance_registry::{register_metric, list_metrics, init_distance_registry};
 use crate::monitoring::PyMetricsCollector;
 use pyo3::Bound;
-use pyo3::types::PyModule;
+use pyo3::types::{PyModule, PyList};
 use crate::hnsw_index::HnswConfig;
 
 #[pyclass(name = "HnswConfig")]
@@ -181,6 +181,7 @@ fn rust_annie(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(register_metric, m)?)?;
     m.add_function(wrap_pyfunction!(list_metrics, m)?)?;
 
+
     // Expose AnnIndex and Distance at the top level for import
     let annindex = m.getattr("AnnIndex")?;
     m.add("AnnIndex", annindex)?;
@@ -188,8 +189,8 @@ fn rust_annie(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("Distance", distance)?;
 
     // Set __all__ for Python import *
-    let all = vec!["AnnIndex", "Distance"];
-    let py_all = all.into_py(py);
+    let all = vec!["AnnIndex".to_string(), "Distance".to_string()];
+    let py_all = PyList::new(py, &all);
     m.add("__all__", py_all)?;
 
     Ok(())
