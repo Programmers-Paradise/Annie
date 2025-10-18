@@ -36,8 +36,9 @@ fn test_security_dos_attempt() {
     pyo3::prepare_freethreaded_python();
     Python::with_gil(|py| {
         let mut index = AnnIndex::new(3, Distance::Euclidean()).unwrap();
-        let big_vecs = vec![vec![1.0; 3]; 1_000_000];
-        let big_ids = (0..1_000_000).collect::<Vec<_>>();
+        // Use one more than the safe limit to ensure the guard triggers
+        let big_vecs = vec![vec![1.0; 3]; 1_000_001];
+        let big_ids = (0..1_000_001).collect::<Vec<_>>();
         let np_data = PyArray2::from_vec2(py, &big_vecs).unwrap();
         let np_ids = PyArray1::from_slice(py, &big_ids);
         let result = index.add(py, np_data.readonly(), np_ids.readonly());

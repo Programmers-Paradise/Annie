@@ -1,6 +1,6 @@
 // Standalone memory safety tests that can run without the main codebase
 
-use bytemuck::{cast_slice, Pod, Zeroable};
+use bytemuck::cast_slice;
 use half::f16;
 
 #[test]

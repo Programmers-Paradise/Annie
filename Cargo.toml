@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 
 rust_annie_macros = { path = "rust_annie_macros/foo" }
-pyo3 = { version = "0.25.0", features = ["extension-module"] }
+pyo3 = { version = "0.25.0" }
 hnsw_rs = "0.3.2"
 numpy = "0.25.0"
 ndarray = "0.16.1"
@@ -33,6 +33,13 @@ thiserror = "2.0"
 [features]
 cuda = ["cust", "lazy_static"]
 rocm = ["hip-rs", "lazy_static"]
+
+# Forwarding features to control PyO3 from this crate
+# Use these in CI/maturin instead of trying to enable dependency features directly.
+python-ext = ["pyo3/extension-module"]
+python-abi3 = ["pyo3/abi3-py38"]
+# On Windows, generate an import library for python3.dll when needed
+pyo3-import-lib = ["pyo3/generate-import-lib"]
 
 [workspace]
 members = [".", "fuzz", "rust_annie_macros/foo"]

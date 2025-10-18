@@ -1,7 +1,7 @@
 // Demonstration of memory safety improvements in GPU backend
 // This example shows the before/after of our memory safety fixes
 
-use bytemuck::{cast_slice, Pod, Zeroable};
+use bytemuck::cast_slice;
 use half::f16;
 
 fn main() {

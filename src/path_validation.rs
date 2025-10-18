@@ -55,19 +55,69 @@ pub fn validate_path_secure(path: &str) -> PyResult<PathBuf> {
         ));
     }
 
-    // Check for obviously malicious patterns
-    let path_lower = path.to_lowercase();
-    let dangerous_patterns = [
-        "..", "/etc/", "\\windows\\", "c:\\", "proc/", "dev/", 
-        "%2e%2e", "%2f", "%5c", "..%2f", "..\\", ".%2e", 
-        "%252e", "%252f", "%255c"
-    ];
-    
-    for pattern in &dangerous_patterns {
-        if path_lower.contains(pattern) {
+    // Helper: identify obviously malicious patterns
+    fn contains_dangerous_sequences(s: &str) -> bool {
+        let dangerous_patterns = [
+            "..", "/etc/", "\\windows\\", "c:\\", "proc/", "dev/",
+            // Encoded traversal attempts (single/double encodings)
+            "%2e%2e", "%2f", "%5c", "..%2f", "..\\", ".%2e",
+            "%252e", "%252f", "%255c",
+            // Guard for deeper encodings observed in tests and common payloads
+            "%25252e", "%25252f", "%25255c"
+        ];
+        let lower = s.to_lowercase();
+        dangerous_patterns.iter().any(|p| lower.contains(p))
+    }
+
+    // Helper: percent-decode a string; returns None on malformed encodings
+    fn percent_decode_once(input: &str) -> Option<String> {
+        let bytes = input.as_bytes();
+        let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'%' if i + 2 < bytes.len() => {
+                    let h1 = bytes[i + 1];
+                    let h2 = bytes[i + 2];
+                    let hi = (h1 as char).to_digit(16)?;
+                    let lo = (h2 as char).to_digit(16)?;
+                    out.push(((hi << 4) as u8) | (lo as u8));
+                    i += 3;
+                }
+                b => {
+                    out.push(b);
+                    i += 1;
+                }
+            }
+        }
+        String::from_utf8(out).ok()
+    }
+
+    // Check original and iteratively percent-decoded forms for dangerous sequences
+    if contains_dangerous_sequences(path) {
+        return Err(RustAnnError::py_err(
+            "InvalidPath",
+            "Path contains potentially dangerous sequences",
+        ));
+    }
+
+    // Decode up to a small, safe limit to catch double/triple encodings
+    let mut cur = path.to_string();
+    for _ in 0..4 {
+        if let Some(decoded) = percent_decode_once(&cur) {
+            if decoded == cur { break; }
+            if contains_dangerous_sequences(&decoded) {
+                return Err(RustAnnError::py_err(
+                    "InvalidPath",
+                    "Path contains potentially dangerous sequences after decoding",
+                ));
+            }
+            cur = decoded;
+        } else {
+            // Malformed percent-encoding — reject to be safe
             return Err(RustAnnError::py_err(
-                "InvalidPath", 
-                "Path contains potentially dangerous sequences"
+                "InvalidPath",
+                "Path contains malformed percent-encoding",
             ));
         }
     }

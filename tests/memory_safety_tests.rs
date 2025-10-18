@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod memory_safety_tests {
-    use bytemuck::{cast_slice, Pod, Zeroable};
+    use bytemuck::cast_slice;
     use half::f16;
 
     #[test]

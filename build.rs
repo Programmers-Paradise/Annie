@@ -1,4 +1,4 @@
 fn main() {
-    println!("cargo:rustc-link-lib=dylib=python3.12");
-    println!("cargo:rustc-link-search=native=/usr/lib/x86_64-linux-gnu");
+    // Intentionally left empty.
+    // Let pyo3/maturin detect and link against the correct Python interpreter.
 }

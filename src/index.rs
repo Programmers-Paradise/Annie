@@ -6,7 +6,6 @@ use serde::{Serialize, Deserialize};
 use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::time::Instant;
 use bit_vec::BitVec;
 
 use crate::backend::AnnBackend;
@@ -367,8 +366,8 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Excessive Allocation", format!("Attempted to add {} vectors, limit is {}", n, MAX_ROWS)));
         }
         let active_entries = self.entries.iter().filter(|e| e.is_some()).count();
-        if active_entries + n >= MAX_ROWS {
-            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would reach or exceed safe limit {}", MAX_ROWS)));
+        if active_entries + n > MAX_ROWS {
+            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would exceed safe limit {}", MAX_ROWS)));
         }
 
         // Check for duplicate IDs
@@ -385,8 +384,18 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("Duplicate IDs", format!("Found duplicate IDs: {:?}", duplicates)));
         }
 
+        // Reserve and insert entries with computed squared norms
         self.entries.reserve(n);
-        
+        for (row_idx, id) in ids.iter().enumerate() {
+            let row = view.row(row_idx);
+            let vec: Vec<f32> = row.to_vec();
+            let sq_norm: f32 = vec.iter().map(|x| x * x).sum();
+            self.entries.push(Some((*id, vec, sq_norm)));
+        }
+
+        // Bump version to signal mutation
+        self.version.fetch_add(1, AtomicOrdering::Relaxed);
+
         Ok(())
     }
 
@@ -414,40 +423,15 @@ impl AnnIndex {
             return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
         }
         let q = query.as_slice()?;
-        let _q_sq = q.iter().map(|x| x * x).sum::<f32>();
-        let _start = Instant::now();
-        
-        let _version = self.version.load(AtomicOrdering::Relaxed);
-
-        // Simple search implementation for now (no inner_search method)
-        if self.entries.is_empty() {
-            return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
+        if q.len() != self.dim {
+            return Err(RustAnnError::py_err(
+                "Dimension Error",
+                format!("Expected dimension {}, got {}", self.dim, q.len()),
+            ));
         }
-
-        let mut results: Vec<(i64, f32)> = self.entries
-            .iter()
-            .filter_map(|entry_opt| {
-                if let Some((id, vector, _norm)) = entry_opt {
-                    if let Some(f) = filter.as_ref() {
-                        if !f.accepts(*id, 0) { // Use 0 as index for now
-                            return None;
-                        }
-                    }
-                    // Simple Euclidean distance
-                    let dist = q.iter().zip(vector.iter())
-                        .map(|(a, b)| (a - b) * (a - b))
-                        .sum::<f32>()
-                        .sqrt();
-                    Some((*id, dist))
-                } else {
-                    None
-                }
-            })
-            .collect();
-            
-        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        let ids = results.iter().take(k).map(|(id, _)| *id).collect();
-        let dists = results.iter().take(k).map(|(_, dist)| *dist).collect();
+        let q_sq = q.iter().map(|x| x * x).sum::<f32>();
+        let version = self.version.load(AtomicOrdering::Relaxed);
+        let (ids, dists) = self.inner_search(q, q_sq, k, filter.as_ref(), version)?;
 
         let ids_array = numpy::PyArray1::from_vec(py, ids).into_any();
         let dists_array = numpy::PyArray1::from_vec(py, dists).into_any();

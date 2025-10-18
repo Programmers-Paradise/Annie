@@ -12,4 +12,6 @@ classifiers = [
 ]
 dynamic = ["version"]
 [tool.maturin]
-features = ["pyo3/extension-module"]
+# Build as an extension module using the stable Python limited API (abi3),
+# so wheels don’t link against a specific libpython (required for musllinux).
+features = ["python-ext", "python-abi3", "pyo3-import-lib"]
