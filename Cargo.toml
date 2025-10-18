@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 
 rust_annie_macros = { path = "rust_annie_macros/foo" }
-pyo3 = { version = "0.25.0", features = ["extension-module"] }
+pyo3 = { version = "0.25.0" }
 hnsw_rs = "0.3.2"
 numpy = "0.25.0"
 ndarray = "0.16.1"

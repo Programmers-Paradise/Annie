@@ -45,9 +45,9 @@ def benchmark(dataset: str = "medium", repeats: int = 50, batch_size: int = 1000
     config = DATASETS[dataset]
     N, D, k = config["N"], config["D"], config["k"]
     
-    # Prepare data
-    data = np.random.rand(N, D).astype(np.float32)
-    ids = np.arange(N, dtype=np.int64)
+    # Prepare data (ensure correct dtype and contiguous layout)
+    data = np.ascontiguousarray(np.random.rand(N, D).astype(np.float32))
+    ids = np.ascontiguousarray(np.arange(N, dtype=np.int64))
     queries = np.random.rand(repeats, D).astype(np.float32)
     
     results = {
@@ -67,9 +67,18 @@ def benchmark(dataset: str = "medium", repeats: int = 50, batch_size: int = 1000
     build_start = time.perf_counter()
     idx = AnnIndex(D, Distance.EUCLIDEAN)
     # Add in batches to respect allocator safety limits and reduce peak memory
-    for start in range(0, N, batch_size):
-        end = min(start + batch_size, N)
-        idx.add(data[start:end], ids[start:end])
+    start = 0
+    try:
+        for start in range(0, N, batch_size):
+            end = min(start + batch_size, N)
+            idx.add(data[start:end], ids[start:end])
+    except Exception as e:
+        # Fail fast with context so CI logs are actionable
+        raise Exception(f"Index add failed at batch starting {start}: {e}")
+    
+    # Sanity check: ensure index is populated before searching
+    if len(idx) == 0:
+        raise Exception("Index build produced zero entries; aborting benchmark")
     build_time = time.perf_counter() - build_start
     mem_after = measure_memory()
     
