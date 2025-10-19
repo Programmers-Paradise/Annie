@@ -36,7 +36,7 @@ This repository uses automated dependency scanning, SBOM generation, and enhance
 - **Concurrency Stress Testing**: Tests added to ensure thread safety and proper handling of concurrent operations.
 - **GPU Error Conditions**: Tests to verify error handling for GPU operations, including mismatched dimensions and large allocations.
 - **Boundary and DoS Checks**: Security tests to ensure boundary conditions are respected and to prevent denial-of-service attempts through excessive resource allocation.
-- **Path Validation**: Path validation logic includes pattern matching against common dangerous sequences, including some percent-encoded patterns. The validation rejects paths containing directory traversal attempts and other potentially dangerous patterns.
+- **Path Validation**: Planned updates to handle percent-encoded sequences, validate both original and decoded forms, and reject malformed encodings; not yet implemented.
 
 ---
 For more details, see `.github/workflows/security-audit.yml`.
