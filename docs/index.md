@@ -16,6 +16,10 @@ pip install maturin
 maturin develop --release
 ```
 
+## Dependencies
+
+Annie now includes the `python3-dll-a` package as a dependency. Ensure that your environment can accommodate this package for optimal functionality.
+
 ## Basic Usage
 ```python
 import numpy as np
