@@ -181,3 +181,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 ## License
 
 This project is licensed under the **MIT License**. See [LICENSE](./LICENSE) for details.
+
+### New Dependency Considerations
+
+The introduction of the `python3-dll-a` dependency may affect thread safety or introduce new threading considerations. Ensure that any threading operations involving this dependency are carefully managed to maintain the thread safety guarantees provided by the `ThreadSafeAnnIndex` class.
