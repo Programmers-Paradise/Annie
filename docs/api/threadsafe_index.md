@@ -185,3 +185,7 @@ This project is licensed under the **MIT License**. See [LICENSE](./LICENSE) for
 ### New Dependency Considerations
 
 The introduction of the `python3-dll-a` dependency may affect thread safety or introduce new threading considerations. Ensure that any threading operations involving this dependency are carefully managed to maintain the thread safety guarantees provided by the `ThreadSafeAnnIndex` class.
+
+### Criterion Update
+
+The `criterion` dependency has been updated to version 0.8.0. Ensure that any performance testing or examples using `criterion` are compatible with this new version. This update may include changes in benchmarking features or API usage, so review the `criterion` documentation for any necessary adjustments.
