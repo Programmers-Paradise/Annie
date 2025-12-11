@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 - GIL-release in `search()` and `search_batch()` for lower Python-side latency.
 
 ### Changed
-- Bumped `rust_annie` version to **0.1.1**.
+- Bumped `rust_annie` version to **0.2.5**.
 
 ## [0.1.1] – 2025-05-20
 
