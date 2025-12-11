@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.2.5] – 2025-12-11
+
 ### Added
 - Support for Manhattan (L1) distance in `Distance.MANHATTAN`.
 - New `remove(ids: List[int])` method to delete entries by ID.
