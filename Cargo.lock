@@ -1305,7 +1305,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rust_annie"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "bincode",
  "bit-vec",

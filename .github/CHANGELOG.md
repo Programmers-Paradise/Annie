@@ -26,13 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.2.5] – 2025-12-11
+
 ### Added
 - Support for Manhattan (L1) distance in `Distance.MANHATTAN`.
 - New `remove(ids: List[int])` method to delete entries by ID.
 - GIL-release in `search()` and `search_batch()` for lower Python-side latency.
 
 ### Changed
-- Bumped `rust_annie` version to **0.1.1**.
+- Bumped `rust_annie` version to **0.2.5**.
 
 ## [0.1.1] – 2025-05-20
 
