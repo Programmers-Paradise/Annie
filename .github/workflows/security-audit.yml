@@ -37,7 +37,7 @@ jobs:
       - name: Install cargo-sbom
         run: cargo install cargo-sbom
       - name: Generate SBOM
-        run: cargo sbom -o sbom.spdx.json
+        run: cargo sbom > sbom.spdx.json
       - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
