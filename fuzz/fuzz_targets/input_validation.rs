@@ -26,7 +26,6 @@ fuzz_target!(|data: &[u8]| {
             let v: Vec<f32> = data[start..end].iter().map(|b| *b as f32).collect();
             vecs.push(v);
         }
-        }
         let ids: Vec<usize> = (0..vecs.len()).collect();
         if !vecs.is_empty() && vecs.len() == ids.len() {
             // Ignore errors, just check for panics/crashes
