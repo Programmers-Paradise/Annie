@@ -16,7 +16,7 @@ This repository uses automated dependency scanning, SBOM generation, and enhance
 - Uses [`cargo sbom`](https://github.com/anchore/syft) to generate a Software Bill of Materials.
 - Run manually with:
   ```bash
-  cargo sbom -o sbom.spdx.json
+  cargo sbom > sbom.spdx.json
   ```
 
 ## Dependency Version Pinning
