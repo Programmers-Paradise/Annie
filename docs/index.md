@@ -330,7 +330,7 @@ CI pipeline includes:
   - Performance benchmarking
   - Documentation generation
   - Fuzz testing for robustness
-  - Auto-release on version change
+  - Publish Releases
 
 ### Fuzz Testing
 
