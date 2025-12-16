@@ -50,8 +50,11 @@ jobs:
           CURRENT_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           echo "Current version: $CURRENT_VERSION"
           
+          # Strip pre-release and build metadata (e.g., -alpha, +build.1)
+          BASE_VERSION=$(echo "$CURRENT_VERSION" | sed 's/[-+].*$//')
+          
           # Parse version components
-          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          IFS='.' read -r major minor patch <<< "$BASE_VERSION"
           
           # Bump version based on input
           case "${{ inputs.bump_type }}" in
@@ -73,7 +76,7 @@ jobs:
           echo "New version: $NEW_VERSION"
           
           # Update version in Cargo.toml
-          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/" Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/g" Cargo.toml
           
           # Verify the change
           grep '^version = ' Cargo.toml | head -1
@@ -86,6 +89,7 @@ jobs:
         run: |
           git add Cargo.toml
           git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
+          git pull --rebase origin ${{ github.ref_name }}
           git push origin ${{ github.ref_name }}
 
       - name: Create and push tag
@@ -220,7 +224,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
 
       - name: Build universal2 wheels
         uses: PyO3/maturin-action@v1
@@ -273,7 +277,13 @@ jobs:
 
       - name: Flatten dist directory
         run: |
-          find dist -name "*.whl" -o -name "*.tar.gz" | xargs -I {} mv {} dist/
+          find dist -name "*.whl" -o -name "*.tar.gz" | while read file; do
+            relpath="${file#dist/}"
+            newname="dist/${relpath//\//_}"
+            if [ "$file" != "$newname" ]; then
+              mv "$file" "$newname"
+            fi
+          done
           find dist -mindepth 1 -type d -empty -delete
 
       - name: Generate artifact attestation
@@ -285,7 +295,7 @@ jobs:
         id: notes
         run: |
           # Get the previous tag
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ needs.version-bump.outputs.tag_name }}^ 2>/dev/null || echo "")
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ needs.version-bump.outputs.tag_name }}^ || echo "")
           
           if [ -z "$PREVIOUS_TAG" ]; then
             echo "notes=First release" >> $GITHUB_OUTPUT
@@ -346,9 +356,7 @@ jobs:
           path: dist
 
       - name: Flatten dist directory
-        run: |
-          find dist -name "*.whl" -o -name "*.tar.gz" | xargs -I {} mv {} dist/
-          find dist -mindepth 1 -type d -empty -delete
+        run: .github/scripts/flatten-dist.sh
 
       - name: List files to publish
         run: ls -lah dist/
