@@ -31,9 +31,16 @@ else:
     try:
         remote_url = subprocess.check_output(["git", "config", "--get", "remote.origin.url"], text=True).strip()
         # Extract from git@github.com:owner/repo.git or https://github.com/owner/repo.git
-        if "github.com" in remote_url:
-            repo_part = remote_url.split("github.com")[-1].strip(":/ ").replace(".git", "")
-            REPO_OWNER, REPO_NAME = repo_part.split("/", 1)
+        # Use regex to safely extract owner/repo from known GitHub URL patterns
+        ssh_match = re.match(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url)
+        https_match = re.match(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", remote_url)
+        
+        if ssh_match:
+            REPO_OWNER, REPO_NAME = ssh_match.groups()
+            REPO_NAME = REPO_NAME.rstrip("/")
+        elif https_match:
+            REPO_OWNER, REPO_NAME = https_match.groups()
+            REPO_NAME = REPO_NAME.rstrip("/")
         else:
             REPO_OWNER, REPO_NAME = "unknown", "unknown"
     except Exception:
