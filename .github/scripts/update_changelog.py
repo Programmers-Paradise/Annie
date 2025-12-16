@@ -30,8 +30,6 @@ else:
     import subprocess
     try:
         remote_url = subprocess.check_output(["git", "config", "--get", "remote.origin.url"], text=True).strip()
-        # Extract from git@github.com:owner/repo.git or https://github.com/owner/repo.git
-        remote_url = subprocess.check_output(["git", "config", "--get", "remote.origin.url"], text=True).strip()
         # Strictly validate remote_url before parsing
         if not re.match(r"^(git@github\.com:[^/]+/.+?\.git|https://github\.com/[^/]+/.+?(/|\.git)?)$", remote_url):
             raise ValueError(f"Untrusted or malformed remote URL: {remote_url}")
@@ -47,6 +45,7 @@ else:
             REPO_NAME = REPO_NAME.rstrip("/")
         else:
             REPO_OWNER, REPO_NAME = "unknown", "unknown"
+    except Exception:
         REPO_OWNER, REPO_NAME = "unknown", "unknown"
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
