@@ -142,7 +142,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features "python-ext,python-abi3,pyo3-import-lib"
+          args: --release --out dist --features "python-ext,python-abi3"
           sccache: 'true'
           manylinux: auto
 
@@ -172,7 +172,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist --features "python-ext,python-abi3,pyo3-import-lib"
+          args: --release --out dist --features "python-ext,python-abi3"
           sccache: 'true'
           manylinux: musllinux_1_2
 
@@ -229,7 +229,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: universal2
-          args: --release --out dist --features "python-ext,python-abi3,pyo3-import-lib"
+          args: --release --out dist --features "python-ext,python-abi3"
           sccache: 'true'
 
       - name: Upload wheels
