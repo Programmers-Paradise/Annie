@@ -1,4 +1,3 @@
-```markdown
 # Security Audit Workflow for Annie
 
 This repository uses automated dependency scanning, SBOM generation, and enhanced security tests to mitigate supply chain risks and ensure robust input validation.
@@ -40,4 +39,3 @@ This repository uses automated dependency scanning, SBOM generation, and enhance
 
 ---
 For more details, see `.github/workflows/security-audit.yml`.
-```
