@@ -332,6 +332,40 @@ CI pipeline includes:
   - Fuzz testing for robustness
   - Publish Releases
 
+### Automated Release Pipeline
+
+The release process has been updated to streamline version management and publishing. The new workflow includes:
+
+- **Version Bump**: Automatically bumps the version based on the specified type (major, minor, patch).
+- **Build Artifacts**: Builds wheels for Linux, Windows, macOS, and source distributions.
+- **GitHub Release**: Automatically creates a GitHub release with generated release notes.
+- **Optional PyPI Publishing**: Optionally publish the release to PyPI.
+
+#### Workflow Configuration
+
+The workflow is triggered manually or on pull request merges. It includes steps for version bumping, building, and publishing:
+
+```yaml
+name: Automated Release Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      publish_to_pypi:
+        description: 'Publish to PyPI after creating release'
+        required: false
+        type: boolean
+        default: false
+```
+
 ### Fuzz Testing
 
 Fuzz testing is integrated to ensure robustness and security of the codebase. It runs automatically on GitHub Actions for each push and pull request.
