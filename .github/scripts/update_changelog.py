@@ -26,27 +26,41 @@ _repo = os.getenv("GITHUB_REPOSITORY", "")
 if "/" in _repo:
     REPO_OWNER, REPO_NAME = _repo.split("/", 1)
 else:
-    # Fallback to git config
-    import subprocess
-    try:
-        remote_url = subprocess.check_output(["git", "config", "--get", "remote.origin.url"], text=True).strip()
-        # Strictly validate remote_url before parsing
-        if not re.match(r"^(git@github\.com:[^/]+/.+?\.git|https://github\.com/[^/]+/.+?(/|\.git)?)$", remote_url):
-            raise ValueError(f"Untrusted or malformed remote URL: {remote_url}")
-        # Use regex to safely extract owner/repo from known GitHub URL patterns
-        ssh_match = re.match(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url)
-        https_match = re.match(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", remote_url)
+    # Fallback to git config - lazy-loaded only if needed
+    REPO_OWNER, REPO_NAME = None, None
+    
+    def _get_repo_from_git():
+        """Lazily fetch repo owner/name from git config (cached after first call)."""
+        global REPO_OWNER, REPO_NAME
+        if REPO_OWNER is not None:
+            return REPO_OWNER, REPO_NAME
         
-        if ssh_match:
-            REPO_OWNER, REPO_NAME = ssh_match.groups()
-            REPO_NAME = REPO_NAME.rstrip("/")
-        elif https_match:
-            REPO_OWNER, REPO_NAME = https_match.groups()
-            REPO_NAME = REPO_NAME.rstrip("/")
-        else:
+        import subprocess
+        try:
+            remote_url = subprocess.check_output(
+                ["git", "config", "--get", "remote.origin.url"],
+                text=True,
+                timeout=5
+            ).strip()
+            # Strictly validate remote_url before parsing
+            if not re.match(r"^(git@github\.com:[^/]+/.+?\.git|https://github\.com/[^/]+/.+?(/|\.git)?)$", remote_url):
+                raise ValueError(f"Untrusted or malformed remote URL: {remote_url}")
+            # Use regex to safely extract owner/repo from known GitHub URL patterns
+            ssh_match = re.match(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url)
+            https_match = re.match(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", remote_url)
+            
+            if ssh_match:
+                REPO_OWNER, REPO_NAME = ssh_match.groups()
+                REPO_NAME = REPO_NAME.rstrip("/")
+            elif https_match:
+                REPO_OWNER, REPO_NAME = https_match.groups()
+                REPO_NAME = REPO_NAME.rstrip("/")
+            else:
+                REPO_OWNER, REPO_NAME = "unknown", "unknown"
+        except Exception:
             REPO_OWNER, REPO_NAME = "unknown", "unknown"
-    except Exception:
-        REPO_OWNER, REPO_NAME = "unknown", "unknown"
+        
+        return REPO_OWNER, REPO_NAME
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
@@ -76,7 +90,8 @@ HEADERS = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.
 def get_pr_labels(pr_number: int) -> List[str]:
     """Fetch PR labels from GitHub API."""
     try:
-        url = f"{GITHUB_API}/repos/{REPO_OWNER}/{REPO_NAME}/pulls/{pr_number}"
+        owner, repo = _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
+        url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}"
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
         pr_data = response.json()
@@ -140,7 +155,8 @@ def extract_changelog_entry(pr_title: str, pr_body: str, pr_number: int, pr_url:
 def get_merged_prs_since(since_date: Optional[str] = None, limit: int = 100) -> List[Dict]:
     """Fetch all merged PRs from GitHub API."""
     try:
-        query = f"repo:{REPO_OWNER}/{REPO_NAME} is:pr is:merged"
+        owner, repo = _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
+        query = f"repo:{owner}/{repo} is:pr is:merged"
         if since_date:
             query += f' merged:>={since_date}'
 
@@ -192,11 +208,12 @@ def get_merged_prs_from_git(limit: int = 100) -> List[Dict]:
                 else:
                     title = line
                 
+                owner, repo = _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
                 prs.append({
                     "number": pr_number,
                     "title": title,
                     "body": "",
-                    "html_url": f"https://github.com/{REPO_OWNER}/{REPO_NAME}/pull/{pr_number}",
+                    "html_url": f"https://github.com/{owner}/{repo}/pull/{pr_number}",
                     "labels": [],
                 })
         
