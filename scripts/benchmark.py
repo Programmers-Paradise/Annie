@@ -42,13 +42,6 @@ def benchmark(
     """
     config = DATASETS[dataset]
     N, D, k = config["N"], config["D"], config["k"]
-    # Example: generate and process data in batches to avoid high memory usage
-    # for i in range(0, N, batch_size):
-    #     X_batch = ... # generate or load batch
-    #     ... # process batch
-    # Adjust downstream code to use batches instead of full arrays
-    config = DATASETS[dataset]
-    N, D, k = config["N"], config["D"], config["k"]
 
     # Prepare data (ensure correct dtype and contiguous layout)
     # Note: Using np.random for synthetic benchmark data generation (not for security purposes)
