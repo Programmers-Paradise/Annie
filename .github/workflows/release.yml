@@ -89,7 +89,6 @@ jobs:
         run: |
           git add Cargo.toml
           git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
-          git pull --rebase origin ${{ github.ref_name }}
           git push origin ${{ github.ref_name }}
 
       - name: Create and push tag
