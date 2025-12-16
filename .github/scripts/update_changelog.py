@@ -41,7 +41,6 @@ else:
         if REPO_OWNER is not None:
             return REPO_OWNER, REPO_NAME
 
-        import subprocess
 
         try:
             remote_url = subprocess.check_output(
@@ -220,8 +219,6 @@ def get_merged_prs_from_git(limit: int = 100) -> List[Dict]:
     Looks for merge commits with pattern: "Merge pull request #N"
     """
     try:
-        import subprocess
-
         result = subprocess.run(
             ["git", "log", "--all", "--oneline", "--merges", "-n", str(limit)],
             capture_output=True,

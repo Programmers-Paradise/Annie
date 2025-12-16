@@ -34,7 +34,6 @@ def main() -> None:
         Returns:
         float: L1.5 distance between a and b.
         """
-        """L1.5 norm distance (between Manhattan and Euclidean)"""
         a = np.asarray(a)
         b = np.asarray(b)
         if a.shape != b.shape:
@@ -55,7 +54,7 @@ def main() -> None:
 
     def mahalanobis_distance(a: np.ndarray, b: np.ndarray) -> float:
         """
-        ahalanobis distance using a predefined covariance matrix.
+        Mahalanobis distance using a predefined covariance matrix.
 
         Args:
         a (np.ndarray): First vector.
@@ -64,7 +63,6 @@ def main() -> None:
         Returns:
         float: Mahalanobis distance between a and b.
         """
-        """Mahalanobis distance using predefined covariance matrix"""
         global cov_inv
         if "cov_inv" not in globals():
             raise RuntimeError(
