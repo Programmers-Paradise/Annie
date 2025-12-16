@@ -1,4 +1,3 @@
-```markdown
 # PyHnswIndex - Approximate Nearest Neighbors with HNSW
 
 The `PyHnswIndex` class provides approximate nearest neighbor search using Hierarchical Navigable Small World (HNSW) graphs.
@@ -513,19 +512,4 @@ pip install rust-annie[gpu]
 
 # Or build from source with GPU features
 maturin develop --release --features gpu
-```
-
-## Contributing
-
-Contributions are welcome! Please:
-
-- Fork the repository
-- Create a feature branch
-- Submit a pull request
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
-
-## License
-
-This project is licensed under the **MIT License**. See [LICENSE](./LICENSE) for details.
 ```

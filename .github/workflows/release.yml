@@ -1,0 +1,367 @@
+name: Automated Release Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      publish_to_pypi:
+        description: 'Publish to PyPI after creating release'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version-bump:
+    name: Bump Version and Create Tag
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      tag_name: ${{ steps.bump.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        id: bump
+        run: |
+          # Read current version from Cargo.toml
+          CURRENT_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Strip pre-release and build metadata (e.g., -alpha, +build.1)
+          BASE_VERSION=$(echo "$CURRENT_VERSION" | sed 's/[-+].*$//')
+          
+          # Parse version components
+          IFS='.' read -r major minor patch <<< "$BASE_VERSION"
+          
+          # Bump version based on input
+          case "${{ inputs.bump_type }}" in
+            major)
+              major=$((major + 1))
+              minor=0
+              patch=0
+              ;;
+            minor)
+              minor=$((minor + 1))
+              patch=0
+              ;;
+            patch)
+              patch=$((patch + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="$major.$minor.$patch"
+          echo "New version: $NEW_VERSION"
+          
+          # Update version in Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEW_VERSION\"/g" Cargo.toml
+          
+          # Verify the change
+          grep '^version = ' Cargo.toml | head -1
+          
+          # Set outputs
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        run: |
+          git add Cargo.toml
+          git commit -m "chore: bump version to ${{ steps.bump.outputs.new_version }}"
+          git push origin ${{ github.ref_name }}
+
+      - name: Create and push tag
+        run: |
+          git tag ${{ steps.bump.outputs.tag_name }}
+          git push origin ${{ steps.bump.outputs.tag_name }}
+
+  rust-checks:
+    name: Rust Quality Checks
+    needs: version-bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --verbose
+
+      - name: Run clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  build-linux:
+    name: Build Linux Wheels
+    needs: version-bump
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features "python-ext,python-abi3"
+          sccache: 'true'
+          manylinux: auto
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist
+
+  build-musllinux:
+    name: Build MuslLinux Wheels
+    needs: version-bump
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features "python-ext,python-abi3"
+          sccache: 'true'
+          manylinux: musllinux_1_2
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.target }}
+          path: dist
+
+  build-windows:
+    name: Build Windows Wheels
+    needs: version-bump
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: ${{ matrix.target }}
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist --features "python-ext,python-abi3,pyo3-import-lib"
+          sccache: 'true'
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.target }}
+          path: dist
+
+  build-macos:
+    name: Build macOS Wheels
+    needs: version-bump
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build universal2 wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: universal2
+          args: --release --out dist --features "python-ext,python-abi3"
+          sccache: 'true'
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-universal2
+          path: dist
+
+  build-sdist:
+    name: Build Source Distribution
+    needs: version-bump
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  create-release:
+    name: Create GitHub Release
+    needs: [version-bump, rust-checks, build-linux, build-musllinux, build-windows, build-macos, build-sdist]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version-bump.outputs.tag_name }}
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten dist directory
+        run: |
+          find dist -name "*.whl" -o -name "*.tar.gz" | while read file; do
+            relpath="${file#dist/}"
+            newname="dist/${relpath//\//_}"
+            if [ "$file" != "$newname" ]; then
+              mv "$file" "$newname"
+            fi
+          done
+          find dist -mindepth 1 -type d -empty -delete
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "dist/*"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Get the previous tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 ${{ needs.version-bump.outputs.tag_name }}^ || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "notes=First release" >> $GITHUB_OUTPUT
+          else
+            # Generate release notes from commits
+            NOTES=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..${{ needs.version-bump.outputs.tag_name }})
+            echo "notes<<EOF" >> $GITHUB_OUTPUT
+            echo "$NOTES" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if pre-release
+        id: prerelease
+        run: |
+          VERSION="${{ needs.version-bump.outputs.new_version }}"
+          if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version-bump.outputs.tag_name }}
+          name: Release ${{ needs.version-bump.outputs.tag_name }}
+          body: |
+            ## What's Changed
+            
+            ${{ steps.notes.outputs.notes }}
+            
+            ## Installation
+            
+            Install via pip:
+            ```bash
+            pip install rust-annie==${{ needs.version-bump.outputs.new_version }}
+            ```
+            
+            ## Assets
+            
+            - Python wheels for Linux (x86_64, aarch64, musllinux)
+            - Python wheels for Windows (x64, x86)
+            - Python wheels for macOS (universal2)
+            - Source distribution (.tar.gz)
+          files: dist/*
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          generate_release_notes: true
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: [version-bump, create-release]
+    runs-on: ubuntu-latest
+    if: ${{ inputs.publish_to_pypi }}
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten dist directory
+        run: .github/scripts/flatten-dist.sh
+
+      - name: List files to publish
+        run: ls -lah dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          verbose: true

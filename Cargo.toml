@@ -2,7 +2,6 @@
 name = "rust_annie"
 version = "0.2.5"
 edition = "2021"
-build = "build.rs"
 
 [lib]
 name = "rust_annie"
