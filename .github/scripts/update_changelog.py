@@ -31,11 +31,13 @@ else:
     try:
         remote_url = subprocess.check_output(["git", "config", "--get", "remote.origin.url"], text=True).strip()
         # Extract from git@github.com:owner/repo.git or https://github.com/owner/repo.git
+        remote_url = subprocess.check_output(["git", "config", "--get", "remote.origin.url"], text=True).strip()
+        # Strictly validate remote_url before parsing
+        if not re.match(r"^(git@github\.com:[^/]+/.+?\.git|https://github\.com/[^/]+/.+?(/|\.git)?)$", remote_url):
+            raise ValueError(f"Untrusted or malformed remote URL: {remote_url}")
         # Use regex to safely extract owner/repo from known GitHub URL patterns
-        SSH_PATTERN = re.compile(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$")
-        HTTPS_PATTERN = re.compile(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$")
-        ssh_match = SSH_PATTERN.match(remote_url)
-        https_match = HTTPS_PATTERN.match(remote_url)
+        ssh_match = re.match(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url)
+        https_match = re.match(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", remote_url)
         
         if ssh_match:
             REPO_OWNER, REPO_NAME = ssh_match.groups()
@@ -45,7 +47,6 @@ else:
             REPO_NAME = REPO_NAME.rstrip("/")
         else:
             REPO_OWNER, REPO_NAME = "unknown", "unknown"
-    except Exception:
         REPO_OWNER, REPO_NAME = "unknown", "unknown"
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
