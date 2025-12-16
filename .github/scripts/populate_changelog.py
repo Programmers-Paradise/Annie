@@ -26,7 +26,9 @@ from update_changelog import (
 
 def populate_changelog(limit: int = 100, since: str = None):
     """Populate changelog with historical PR data."""
-    print(f"Fetching merged PRs (limit: {limit})" + (f", since {since}" if since else ""))
+    print(
+        f"Fetching merged PRs (limit: {limit})" + (f", since {since}" if since else "")
+    )
 
     prs = get_merged_prs_since(since_date=since, limit=limit)
     print(f"Found {len(prs)} merged PRs")
@@ -58,17 +60,31 @@ def populate_changelog(limit: int = 100, since: str = None):
 
     # Replace or add unreleased section
     import re
+
     if "## [Unreleased]" in content:
         # Find the next version header
-        unreleased_match = re.search(r"## \[Unreleased\].*?(?=\n## \[|\Z)", content, re.DOTALL)
+        unreleased_match = re.search(
+            r"## \[Unreleased\].*?(?=\n## \[|\Z)", content, re.DOTALL
+        )
         if unreleased_match:
-            content = content[: unreleased_match.start()] + new_unreleased + "\n" + content[unreleased_match.end() :]
+            content = (
+                content[: unreleased_match.start()]
+                + new_unreleased
+                + "\n"
+                + content[unreleased_match.end() :]
+            )
     else:
         # Insert after "# Changelog" header
         changelog_match = re.search(r"(# Changelog\n)", content)
         if changelog_match:
             insert_pos = changelog_match.end()
-            content = content[:insert_pos] + "\n" + new_unreleased + "\n" + content[insert_pos:]
+            content = (
+                content[:insert_pos]
+                + "\n"
+                + new_unreleased
+                + "\n"
+                + content[insert_pos:]
+            )
         else:
             content = new_unreleased + "\n\n" + content
 
@@ -93,8 +109,15 @@ Examples:
   python populate_changelog.py --since 2025-06-01
         """,
     )
-    parser.add_argument("--limit", type=int, default=100, help="Maximum number of PRs to fetch (default: 100)")
-    parser.add_argument("--since", type=str, help="Only fetch PRs merged since this date (YYYY-MM-DD)")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Maximum number of PRs to fetch (default: 100)",
+    )
+    parser.add_argument(
+        "--since", type=str, help="Only fetch PRs merged since this date (YYYY-MM-DD)"
+    )
 
     args = parser.parse_args()
 

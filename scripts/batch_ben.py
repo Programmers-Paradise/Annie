@@ -1,12 +1,13 @@
-import time,json,argparse
+import time, json, argparse
 import numpy as np
 from rust_annie import AnnIndex, Distance
+
 
 def benchmark_batch(N=10000, D=64, k=10, batch_size=64, repeats=20):
     # 1. Prepare random data
     data = np.random.rand(N, D).astype(np.float32)
-    ids  = np.arange(N, dtype=np.int64)
-    idx  = AnnIndex(D, Distance.EUCLIDEAN)
+    ids = np.arange(N, dtype=np.int64)
+    idx = AnnIndex(D, Distance.EUCLIDEAN)
     idx.add(data, ids)
 
     # 2. Prepare query batch
@@ -23,10 +24,11 @@ def benchmark_batch(N=10000, D=64, k=10, batch_size=64, repeats=20):
 
     results = {
         "batch_time_ms": t_batch * 1e3,
-        "per_query_time_ms": (t_batch / batch_size) * 1e3
+        "per_query_time_ms": (t_batch / batch_size) * 1e3,
     }
 
     return results
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

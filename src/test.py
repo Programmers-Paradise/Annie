@@ -1,6 +1,7 @@
 import numpy as np
 from rust_annie import AnnIndex, Distance
 
+
 def main():
     dim = 4
 
@@ -9,7 +10,7 @@ def main():
 
     # Create some data
     data = np.random.rand(10, dim).astype(np.float32)
-    ids  = np.arange(10, dtype=np.int64)
+    ids = np.arange(10, dtype=np.int64)
 
     # Add data to the index
     idx.add(data, ids)
@@ -26,6 +27,7 @@ def main():
     idx2 = AnnIndex.load("example_index.bin")
     neigh2, _ = idx2.search(q, k=3)
     print("Reloaded neighbors:", neigh2)
+
 
 if __name__ == "__main__":
     main()
