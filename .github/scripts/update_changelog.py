@@ -5,16 +5,22 @@ Extracts metadata from PR title, body, and labels to categorize changes.
 """
 
 import os
+import sys
 import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
+import subprocess
 
 try:
     import requests
 except ImportError:
     print("Installing requests...")
-    os.system("pip install requests")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests"], timeout=30)
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install requests: {e}")
+        sys.exit(1)
     import requests
 
 
