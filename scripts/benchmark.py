@@ -43,13 +43,8 @@ def benchmark(
     config = DATASETS[dataset]
     N, D, k = config["N"], config["D"], config["k"]
 
-    # Prepare data (ensure correct dtype and contiguous layout)
-    # Note: Using np.random for synthetic benchmark data generation (not for security purposes)
-    # This is test data for performance measurement, not cryptographic or security-sensitive
-    # devskim: DS148264 - benchmark synthetic data, not security-sensitive
     data = np.ascontiguousarray(np.random.rand(N, D).astype(np.float32))
     ids = np.ascontiguousarray(np.arange(N, dtype=np.int64))
-    # devskim: DS148264 - benchmark query data, non-security use
     queries = np.random.rand(repeats, D).astype(np.float32)
 
     results = {
