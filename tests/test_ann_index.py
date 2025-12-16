@@ -1,6 +1,7 @@
 from rust_annie import AnnIndex, Distance
 import numpy as np
 
+
 def test_len_and_dim():
     dim = 3
     index = AnnIndex(dim, Distance.EUCLIDEAN)

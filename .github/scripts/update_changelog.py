@@ -28,27 +28,33 @@ if "/" in _repo:
 else:
     # Fallback to git config - lazy-loaded only if needed
     REPO_OWNER, REPO_NAME = None, None
-    
+
     def _get_repo_from_git():
         """Lazily fetch repo owner/name from git config (cached after first call)."""
         global REPO_OWNER, REPO_NAME
         if REPO_OWNER is not None:
             return REPO_OWNER, REPO_NAME
-        
+
         import subprocess
+
         try:
             remote_url = subprocess.check_output(
-                ["git", "config", "--get", "remote.origin.url"],
-                text=True,
-                timeout=5
+                ["git", "config", "--get", "remote.origin.url"], text=True, timeout=5
             ).strip()
             # Strictly validate remote_url before parsing
-            if not re.match(r"^(git@github\.com:[^/]+/.+?\.git|https://github\.com/[^/]+/.+?(/|\.git)?)$", remote_url):
+            if not re.match(
+                r"^(git@github\.com:[^/]+/.+?\.git|https://github\.com/[^/]+/.+?(/|\.git)?)$",
+                remote_url,
+            ):
                 raise ValueError(f"Untrusted or malformed remote URL: {remote_url}")
             # Use regex to safely extract owner/repo from known GitHub URL patterns
-            ssh_match = re.match(r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url)
-            https_match = re.match(r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", remote_url)
-            
+            ssh_match = re.match(
+                r"git@github\.com:([^/]+)/(.+?)(?:\.git)?$", remote_url
+            )
+            https_match = re.match(
+                r"https://github\.com/([^/]+)/(.+?)(?:\.git)?/?$", remote_url
+            )
+
             if ssh_match:
                 REPO_OWNER, REPO_NAME = ssh_match.groups()
                 REPO_NAME = REPO_NAME.rstrip("/")
@@ -61,8 +67,9 @@ else:
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
                 raise
             REPO_OWNER, REPO_NAME = "unknown", "unknown"
-        
+
         return REPO_OWNER, REPO_NAME
+
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 
@@ -86,13 +93,18 @@ CATEGORY_MAPPING = {
     "security": "Security",
 }
 
-HEADERS = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+HEADERS = {
+    "Authorization": f"token {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github.v3+json",
+}
 
 
 def get_pr_labels(pr_number: int) -> List[str]:
     """Fetch PR labels from GitHub API."""
     try:
-        owner, repo = _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
+        owner, repo = (
+            _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
+        )
         url = f"{GITHUB_API}/repos/{owner}/{repo}/pulls/{pr_number}"
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
@@ -120,7 +132,9 @@ def categorize_change(pr_title: str, pr_body: str, labels: List[str]) -> str:
     return "Changed"
 
 
-def extract_changelog_entry(pr_title: str, pr_body: str, pr_number: int, pr_url: str) -> str:
+def extract_changelog_entry(
+    pr_title: str, pr_body: str, pr_number: int, pr_url: str
+) -> str:
     """
     Extract a changelog entry from PR title and body.
     Looks for:
@@ -143,7 +157,12 @@ def extract_changelog_entry(pr_title: str, pr_body: str, pr_number: int, pr_url:
     # Use PR title as fallback, clean it up
     title = pr_title.strip()
     # Remove conventional commit prefixes (feat:, fix:, etc.)
-    title = re.sub(r"^(feat|fix|docs|style|refactor|perf|test|chore):\s*", "", title, flags=re.IGNORECASE)
+    title = re.sub(
+        r"^(feat|fix|docs|style|refactor|perf|test|chore):\s*",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    )
     # Remove PR template remnants
     title = re.sub(r"^\*\*.*?\*\*\s*", "", title)
     title = title.strip()
@@ -154,13 +173,17 @@ def extract_changelog_entry(pr_title: str, pr_body: str, pr_number: int, pr_url:
     return f"PR #{pr_number} ({pr_url})"
 
 
-def get_merged_prs_since(since_date: Optional[str] = None, limit: int = 100) -> List[Dict]:
+def get_merged_prs_since(
+    since_date: Optional[str] = None, limit: int = 100
+) -> List[Dict]:
     """Fetch all merged PRs from GitHub API."""
     try:
-        owner, repo = _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
+        owner, repo = (
+            _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
+        )
         query = f"repo:{owner}/{repo} is:pr is:merged"
         if since_date:
-            query += f' merged:>={since_date}'
+            query += f" merged:>={since_date}"
 
         url = f"{GITHUB_API}/search/issues"
         params = {
@@ -171,7 +194,11 @@ def get_merged_prs_since(since_date: Optional[str] = None, limit: int = 100) -> 
         }
 
         # Use token if available, but make it optional for public repos
-        headers = HEADERS.copy() if GITHUB_TOKEN else {"Accept": "application/vnd.github.v3+json"}
+        headers = (
+            HEADERS.copy()
+            if GITHUB_TOKEN
+            else {"Accept": "application/vnd.github.v3+json"}
+        )
         response = requests.get(url, headers=headers, params=params, timeout=10)
         response.raise_for_status()
         return response.json().get("items", [])
@@ -188,13 +215,14 @@ def get_merged_prs_from_git(limit: int = 100) -> List[Dict]:
     """
     try:
         import subprocess
+
         result = subprocess.run(
             ["git", "log", "--all", "--oneline", "--merges", "-n", str(limit)],
             capture_output=True,
             text=True,
             timeout=10,
         )
-        
+
         prs = []
         for line in result.stdout.strip().split("\n"):
             if not line:
@@ -209,16 +237,22 @@ def get_merged_prs_from_git(limit: int = 100) -> List[Dict]:
                     title = title_match.group(2).strip()
                 else:
                     title = line
-                
-                owner, repo = _get_repo_from_git() if REPO_OWNER is None else (REPO_OWNER, REPO_NAME)
-                prs.append({
-                    "number": pr_number,
-                    "title": title,
-                    "body": "",
-                    "html_url": f"https://github.com/{owner}/{repo}/pull/{pr_number}",
-                    "labels": [],
-                })
-        
+
+                owner, repo = (
+                    _get_repo_from_git()
+                    if REPO_OWNER is None
+                    else (REPO_OWNER, REPO_NAME)
+                )
+                prs.append(
+                    {
+                        "number": pr_number,
+                        "title": title,
+                        "body": "",
+                        "html_url": f"https://github.com/{owner}/{repo}/pull/{pr_number}",
+                        "labels": [],
+                    }
+                )
+
         return prs[:limit]
     except Exception as e:
         print(f"Warning: Could not parse git history: {e}")
@@ -302,7 +336,9 @@ def build_changelog_content(prs: List[Dict]) -> str:
     return content
 
 
-def update_changelog_single_pr(pr_number: int, pr_title: str, pr_body: str, pr_author: str, pr_url: str):
+def update_changelog_single_pr(
+    pr_number: int, pr_title: str, pr_body: str, pr_author: str, pr_url: str
+):
     """Update changelog for a single merged PR."""
     before, existing_prs, after = parse_changelog()
 
@@ -321,8 +357,14 @@ def update_changelog_single_pr(pr_number: int, pr_title: str, pr_body: str, pr_a
     # Parse existing unreleased section
     if before and after:
         # Extract existing unreleased sections
-        unreleased_content = before.split("## [Unreleased]")[1] if "## [Unreleased]" in before else ""
-        full_before = before.split("## [Unreleased]")[0] if "## [Unreleased]" in before else before
+        unreleased_content = (
+            before.split("## [Unreleased]")[1] if "## [Unreleased]" in before else ""
+        )
+        full_before = (
+            before.split("## [Unreleased]")[0]
+            if "## [Unreleased]" in before
+            else before
+        )
     else:
         unreleased_content = ""
         full_before = before
@@ -336,7 +378,11 @@ def update_changelog_single_pr(pr_number: int, pr_title: str, pr_body: str, pr_a
         pattern = rf"### {cat}\n((?:- .*\n)*)"
         match = re.search(pattern, unreleased_content)
         if match:
-            entries = [line.strip() for line in match.group(1).split("\n") if line.strip().startswith("-")]
+            entries = [
+                line.strip()
+                for line in match.group(1).split("\n")
+                if line.strip().startswith("-")
+            ]
             entries_by_category[cat] = [e[2:] for e in entries]  # Remove "- "
 
     # Add new entry
@@ -348,7 +394,9 @@ def update_changelog_single_pr(pr_number: int, pr_title: str, pr_body: str, pr_a
     unreleased_section = "## [Unreleased]\n"
     for category in category_order:
         if category in entries_by_category:
-            unreleased_section += format_changelog_section(category, entries_by_category[category])
+            unreleased_section += format_changelog_section(
+                category, entries_by_category[category]
+            )
 
     # Reconstruct full changelog
     new_content = full_before + unreleased_section + after
@@ -388,12 +436,19 @@ def build_full_changelog_from_history(limit: int = 100):
         if "## [Unreleased]" in content:
             # Find the next version after unreleased
             unreleased_pattern = r"## \[Unreleased\].*?(?=\n## \[|\Z)"
-            new_content = re.sub(unreleased_pattern, new_unreleased, content, flags=re.DOTALL)
+            new_content = re.sub(
+                unreleased_pattern, new_unreleased, content, flags=re.DOTALL
+            )
         else:
             # Insert unreleased section at the top of the actual changelog
             changelog_start = content.find("# Changelog")
             if changelog_start != -1:
-                new_content = content[:changelog_start] + new_unreleased + "\n\n" + content[changelog_start:]
+                new_content = (
+                    content[:changelog_start]
+                    + new_unreleased
+                    + "\n\n"
+                    + content[changelog_start:]
+                )
             else:
                 new_content = new_unreleased + "\n\n" + content
     else:

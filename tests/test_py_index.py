@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from rust_annie import Index, Distance
 
+
 def test_brute_index_add_search():
     index = Index("brute", 4, Distance.EUCLIDEAN)
     assert isinstance(index, Index)
@@ -19,6 +20,7 @@ def test_brute_index_add_search():
     assert isinstance(dists, np.ndarray)
     assert ids.shape == (1,)
     assert dists.shape == (1,)
+
 
 def test_hnsw_index_add_search():
     index = Index("hnsw", 4, Distance.EUCLIDEAN)
@@ -38,6 +40,7 @@ def test_hnsw_index_add_search():
     assert ids.shape == (1,)
     assert dists.shape == (1,)
     assert dists[0] == 0.0  # distances are mocked as 0.0 for HNSW currently
+
 
 def test_invalid_backend():
     with pytest.raises(ValueError) as excinfo:

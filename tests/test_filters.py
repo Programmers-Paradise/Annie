@@ -2,16 +2,20 @@ import pytest
 import numpy as np
 from rust_annie import AnnIndex, Distance, Filter
 
+
 @pytest.fixture
 def sample_data():
-    vecs = np.array([
-        [1.0, 2.0, 3.0],
-        [4.0, 5.0, 6.0],
-        [7.0, 8.0, 9.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0]
-    ], dtype=np.float32)
+    vecs = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0, 6.0],
+            [7.0, 8.0, 9.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
     ids = np.array([10, 11, 12, 13, 14, 15], dtype=np.int64)
     return vecs, ids
 
@@ -74,10 +78,13 @@ def test_len(sample_data):
 
 def test_minkowski_distance():
     index = AnnIndex.new_minkowski(dim=3, p=3.0)
-    vecs = np.array([
-        [1.0, 2.0, 2.0],
-        [2.0, 3.0, 1.0],
-    ], dtype=np.float32)
+    vecs = np.array(
+        [
+            [1.0, 2.0, 2.0],
+            [2.0, 3.0, 1.0],
+        ],
+        dtype=np.float32,
+    )
     ids = np.array([1, 2], dtype=np.int64)
     index.add(vecs, ids)
 
@@ -113,58 +120,62 @@ def test_load_invalid_path():
     with pytest.raises(Exception, match="Failed to open file"):
         AnnIndex.load("non_existent_index_file")
 
+
 def test_id_range_filter(sample_data):
     vecs, ids = sample_data
     index = AnnIndex(3, Distance.Euclidean())
     index.add(vecs, ids)
-    
+
     # Create range filter (IDs 11-14)
     id_filter = Filter.id_range(11, 14)
     query = np.array([4.0, 5.0, 6.0], dtype=np.float32)
     ids_out, _ = index.search(query, k=10, filter=id_filter)
-    
+
     assert all(11 <= id <= 14 for id in ids_out)
+
 
 def test_id_set_filter(sample_data):
     vecs, ids = sample_data
     index = AnnIndex(3, Distance.Euclidean())
     index.add(vecs, ids)
-    
+
     # Create set filter (IDs 10, 15)
     id_filter = Filter.id_set([10, 15])
     query = np.array([1.0, 0.0, 0.0], dtype=np.float32)
     ids_out, _ = index.search(query, k=10, filter=id_filter)
-    
+
     assert set(ids_out).issubset({10, 15})
+
 
 def test_compound_filter(sample_data):
     vecs, ids = sample_data
     index = AnnIndex(3, Distance.Euclidean())
     index.add(vecs, ids)
-    
+
     # Create compound filter (ID >= 13 OR ID in {10, 11})
     range_filt = Filter.id_range(13, 20)
     set_filt = Filter.id_set([10, 11])
     compound_filter = Filter.compound([range_filt, set_filt])
-    
+
     query = np.array([1.0, 1.0, 1.0], dtype=np.float32)
     ids_out, _ = index.search(query, k=10, filter=compound_filter)
-    
+
     assert all(id in {10, 11, 13, 14, 15} for id in ids_out)
+
 
 def test_boolean_filter(sample_data):
     vecs, ids = sample_data
     index = AnnIndex(3, Distance.Euclidean())
     index.add(vecs, ids)
-    
+
     # Create boolean filter (allow even indices)
     bits = [i % 2 == 0 for i in range(len(ids))]
     index.update_boolean_filter("even_indices", bits)
     bool_filter = Filter.boolean("even_indices")
-    
+
     query = np.array([1.0, 1.0, 1.0], dtype=np.float32)
     ids_out, _ = index.search(query, k=10, filter=bool_filter)
-    
+
     # Verify only even-indexed items returned
     all_ids = [id for _, id in sorted(enumerate(ids), key=lambda x: x[1])]
     assert all(id in all_ids[0::2] for id in ids_out)

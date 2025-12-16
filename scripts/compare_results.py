@@ -4,10 +4,11 @@ import sys
 from numbers import Number
 
 baseline = json.load(open(sys.argv[1]))
-current  = json.load(open(sys.argv[2]))
+current = json.load(open(sys.argv[2]))
 
 # relative-change threshold (20% by default)
 THRESHOLD = 0.2
+
 
 def compare_value(key_path, b, c):
     """Compare two numeric values and return True if within threshold."""
@@ -35,6 +36,7 @@ def compare_value(key_path, b, c):
         print(f"✅ {key_path} OK: {b:.3f} → {c:.3f}")
         return True
 
+
 def recurse_compare(prefix, b_obj, c_obj):
     """Walk two parallel structures and compare leaf numbers."""
     ok = True
@@ -56,6 +58,7 @@ def recurse_compare(prefix, b_obj, c_obj):
             # Non-numeric leaf—skip
             print(f"⚠️  Skipping non-numeric key {full_key}")
     return ok
+
 
 if __name__ == "__main__":
     all_ok = recurse_compare("", baseline, current)
