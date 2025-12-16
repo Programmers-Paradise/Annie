@@ -1,4 +1,3 @@
-```markdown
 ## ANN Search Filtering
 
 This document explains how to use the filtering capabilities to improve Approximate Nearest Neighbor (ANN) search.
@@ -197,4 +196,3 @@ if __name__ == "__main__":
 - Example usage: [`scripts/filter_example.py`](../scripts/filter_example.py)
 - Unit tests covering filter behavior: [`tests/test_filters.py`](../tests/test_filters.py)
 - Benchmarking script: [`scripts/compare.py`](../scripts/compare.py)
-```
