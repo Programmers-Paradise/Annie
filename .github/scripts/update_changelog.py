@@ -57,7 +57,9 @@ else:
                 REPO_NAME = REPO_NAME.rstrip("/")
             else:
                 REPO_OWNER, REPO_NAME = "unknown", "unknown"
-        except Exception:
+        except Exception as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
             REPO_OWNER, REPO_NAME = "unknown", "unknown"
         
         return REPO_OWNER, REPO_NAME
