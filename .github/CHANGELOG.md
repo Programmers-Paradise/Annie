@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+- Replace outdated release automation with modern maturin-based pipeline ([#28](https://github.com/arnavk23/Annie/pull/28))
+- Fix failing CI checks in security and CodeQL workflows ([#27](https://github.com/arnavk23/Annie/pull/27))
+- chore(deps): bump rayon from 1.10.0 to 1.11.0 ([#9](https://github.com/arnavk23/Annie/pull/9))
+- chore(deps): bump proc-macro2 from 1.0.96 to 1.0.101 ([#10](https://github.com/arnavk23/Annie/pull/10))
+
+
 ## [0.2.5] – 2025-12-11
 
 ### Added
