@@ -1,6 +1,6 @@
 # ThreadSafeAnnIndex - Thread-safe Nearest Neighbor Index
 
-The `ThreadSafeAnnIndex` class provides a thread-safe wrapper around `AnnIndex` for concurrent access, now utilizing helper functions for acquiring locks to ensure consistent error handling. With the recent update, the serialization and deserialization processes now use `bincode` version 3.0.0, which may affect the API or behavior.
+The `ThreadSafeAnnIndex` class provides a thread-safe wrapper around `AnnIndex` for concurrent access, now utilizing helper functions for acquiring locks to ensure consistent error handling.
 
 ## Constructor
 
@@ -42,10 +42,10 @@ Thread-safe batch search. This method now includes enhanced error handling for r
 Thread-safe filtered search using a custom Python callback function and a helper function to acquire a read lock.
 
 ### `save(path: str)`
-Thread-safe save using a helper function to acquire a read lock. The serialization process now uses `bincode` version 3.0.0, which may affect compatibility with previous versions.
+Thread-safe save using a helper function to acquire a read lock.
 
 ### `static load(path: str) -> ThreadSafeAnnIndex`
-Thread-safe load. The deserialization process now uses `bincode` version 3.0.0, which may affect compatibility with previous versions.
+Thread-safe load.
 
 ## Example
 ```python

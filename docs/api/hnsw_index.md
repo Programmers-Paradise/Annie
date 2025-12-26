@@ -108,8 +108,6 @@ The library now uses the `thiserror` crate for improved error handling. This cha
 
 The library uses the `serde` crate for serialization and deserialization, which has been updated to version `1.0.228`. This update ensures compatibility with the latest features and improvements in the `serde` ecosystem. Users should verify that their serialized data is compatible with this version.
 
-The `bincode` crate, used for serialization and deserialization, has been upgraded to version `3.0.0`. This upgrade may affect the compatibility of serialized data with previous versions. Users should ensure that their data is compatible with this new version.
-
 ## Integration with `python3-dll-a`
 
 The `python3-dll-a` package has been integrated into the library, potentially impacting the HNSW index API. This integration may enhance the library's functionality or performance, and users should review any related changes or improvements.
