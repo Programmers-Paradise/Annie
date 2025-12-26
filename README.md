@@ -19,11 +19,9 @@ A lightning-fast, Rust-powered Approximate Nearest Neighbor library for Python w
 4. [Examples](#examples)
 5. [Benchmark Results](#benchmark-results)
 6. [API Reference](#api-reference)
-7. [Architecture](#architecture)
-8. [Performance](#performance)
-9. [GPU Acceleration](#gpu-acceleration)
-10. [Contributing](#contributing)
-11. [License](#license)
+7. [Performance](#performance)
+8. [GPU Acceleration](#gpu-acceleration)
+9. [License](#license)
 
 ## Features
 
@@ -254,31 +252,6 @@ Enum for distance metrics:
 - `Distance.MANHATTAN` - L1 distance
 - `Distance.CHEBYSHEV` - L∞ distance
 
-## Architecture
-
-### Design Philosophy
-
-- **Performance First**: Rust + SIMD for speed, PyO3 stable ABI for compatibility
-- **Safety**: Thread-safe by design, validated input handling
-- **Flexibility**: Multiple backends (brute-force, HNSW) for different use cases
-- **Integration**: Zero-copy NumPy bindings, minimal Python overhead
-
-### Project Structure
-
-```
-.
-├── src/
-│   ├── lib.rs                 # Main library bindings
-│   ├── index.rs              # AnnIndex implementation
-│   ├── hnsw_wrapper.rs       # HNSW wrapper
-│   └── gpu/                  # GPU acceleration (CUDA)
-├── .github/
-│   ├── workflows/            # CI/CD pipelines
-│   └── scripts/              # Automation scripts
-├── scripts/                  # Benchmarking & testing
-└── tests/                    # Integration tests
-```
-
 ## Performance
 
 ### Single-Query Overhead
@@ -370,30 +343,8 @@ python scripts/benchmark.py --dataset medium
 python scripts/dashboard.py
 ```
 
-### CI/CD Pipeline
-
-GitHub Actions automatically runs:
-- Cross-platform builds (Linux, Windows, macOS)
-- Comprehensive test suite
-- Performance benchmarks
-- CodeQL security scanning
-- Type checking with mypy
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Add tests and documentation
-4. Submit a pull request
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
-
 ## License
 
 This project is licensed under the **MIT License**. See [LICENSE](./LICENSE) for details.
 
 ---
-
-**Built with ❤️ in Rust for Python**
