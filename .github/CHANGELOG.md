@@ -2,11 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org).
-
-## [Unreleased]
-
 ## [0.2.5] – 2025-12-11
 
 ### Added
@@ -103,48 +98,3 @@ and this project adheres to [Semantic Versioning](https://semver.org).
 - Bump half from 2.6.0 to 2.7.1 ([#215](https://github.com/arnavk23/Annie/pull/215), [#219](https://github.com/arnavk23/Annie/pull/219))
 - Bump hnsw_rs from 0.3.2 to 0.3.3 ([#227](https://github.com/arnavk23/Annie/pull/227))
 - Bump hip-rs to 1.0.0 ([#87](https://github.com/arnavk23/Annie/pull/87))
-
-## [0.2.3] – 2025-11-01
-
-### Added
-- HNSW backend integration ([#34](https://github.com/arnavk23/Annie/pull/34))
-- Distance tests ([#20](https://github.com/arnavk23/Annie/pull/20))
-- ann_bench.rs benchmark ([#105](https://github.com/arnavk23/Annie/pull/105))
-
-### Changed
-- Enhanced HNSW integration demo ([#25](https://github.com/arnavk23/Annie/pull/25))
-
-## [0.2.1] – 2025-10-15
-
-### Changed
-- Version bump to 0.2.1 ([#130](https://github.com/arnavk23/Annie/pull/130))
-
-## [0.1.1] – 2025-05-20
-
-### Added
-- Manhattan (L1) distance support
-- `Distance.MANHATTAN` class attribute and `__repr__` value
-
-### Fixed
-- Correctly annotate `.collect::<Vec<_>>()` in batch search
-- Removed `into_pyerr()` misuse in `search()`
-
-## [0.1.0] – 2025-05-16
-
-### Added
-- Initial release with Euclidean (L2) and Cosine distances
-- `AnnIndex`, `search()`, `search_batch()`, `add()`, `save()`, `load()` APIs
-- SIMD-free brute-force search accelerated by **Rayon**
-- Thread-safe wrapper `ThreadSafeAnnIndex` with GIL release
-
-### Changed
-- Logging improvements in CI workflow
-- Performance optimizations: cached norms, GIL release, parallel loops
-
-### Fixed
-- Various build errors on Windows and macOS
-
-## [0.0.1] – 2025-05-10
-
-### Added
-- Prototype implementation of brute-force k-NN index in Rust
