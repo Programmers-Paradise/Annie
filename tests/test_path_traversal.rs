@@ -1,9 +1,3 @@
-// tests/path_traversal_tests.rs
-//! Comprehensive security tests for path traversal vulnerabilities
-//!
-//! These tests validate that the path validation functions prevent
-//! various forms of directory traversal attacks.
-
 use rust_annie::path_validation::validate_path_secure;
 use rust_annie::index::AnnIndex;
 use rust_annie::metrics::Distance;
@@ -12,7 +6,6 @@ use pyo3::Python;
 
 #[test]
 fn test_basic_directory_traversal() {
-    // Classic directory traversal patterns
     let malicious_paths = [
         "../../../etc/passwd",
         "..\\..\\..\\windows\\system32\\config\\sam",
