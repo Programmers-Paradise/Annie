@@ -11,16 +11,20 @@ def benchmark_batch(N=10000, D=64, k=10, batch_size=64, repeats=20):
     idx.add(data, ids)
 
     # 2. Prepare query batch
-    queries = data[:batch_size]
+    queries = data[np.random.randint(low=0,high=N,size=(batch_size),dtype=np.int64)]
 
     # Warm-up
     idx.search_batch(queries, k, None)  # Added None for filter
 
     # 3. Benchmark Rust batch search
-    t0 = time.perf_counter()
+    t_total = 0
     for _ in range(repeats):
+        queries = data[np.random.randint(low=0,high=N,size=(batch_size),dtype=np.int32)] # takes a set of new random query every time
+        t_start = time.perf_counter()
         idx.search_batch(queries, k, None)  # Added None for filter
-    t_batch = (time.perf_counter() - t0) / repeats
+        t_end = time.perf_counter()
+        t_total += t_end - t_start
+    t_batch = t_total / repeats
 
     results = {
         "batch_time_ms": t_batch * 1e3,
