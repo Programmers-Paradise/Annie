@@ -19,7 +19,7 @@ def benchmark_batch(N=10000, D=64, k=10, batch_size=64, repeats=20):
     # 3. Benchmark Rust batch search
     t_total = 0
     for _ in range(repeats):
-        queries = data[np.random.randint(low=0,high=N,size=(batch_size),dtype=np.int32)] # takes a set of new random query every time
+        queries = data[np.random.randint(low=0,high=N,size=(batch_size),dtype=np.int64)] # takes a set of new random query every time
         t_start = time.perf_counter()
         idx.search_batch(queries, k, None)  # Added None for filter
         t_end = time.perf_counter()
