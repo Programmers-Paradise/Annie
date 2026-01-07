@@ -3,7 +3,7 @@ import numpy as np
 from rust_annie import AnnIndex, Distance
 from datetime import datetime
 from sklearn.neighbors import NearestNeighbors
-from typing import Dict, Any
+from typing import Dict, Any, Literal
 import faiss
 import annoy
 
@@ -29,7 +29,7 @@ def measure_memory() -> float:
 
 
 def benchmark(
-    dataset: str = "medium", repeats: int = 50, batch_size: int = 10000
+    dataset: Literal["small","medium","large"] = "medium", repeats: int = 50, batch_size: int = 10000
 ) -> Dict[str, Any]:
     """
     Runs benchmarks on multiple ANN libraries using synthetic datasets.
@@ -45,7 +45,7 @@ def benchmark(
 
     data = np.ascontiguousarray(np.random.rand(N, D).astype(np.float32))
     ids = np.ascontiguousarray(np.arange(N, dtype=np.int64))
-    queries = np.random.rand(repeats, D).astype(np.float32)
+    queries = np.random.rand(batch_size, D).astype(np.float32)
 
     results = {
         "timestamp": datetime.utcnow().timestamp(),
