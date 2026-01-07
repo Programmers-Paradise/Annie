@@ -18,9 +18,10 @@ def check_regression():
     files = [f for _, f in file_timestamps]
     current_file = files[-1]
     baseline_file = files[-2]
-
-    current_data = json.load(open(current_file))
-    baseline_data = json.load(open(baseline_file))
+    with open(current_file) as f:
+        current_data = json.load(f)
+    with open(baseline_file) as f:
+        baseline_data = json.load(f)
 
     dataset = current_data.get("dataset", "unknown")
     regressions = []
