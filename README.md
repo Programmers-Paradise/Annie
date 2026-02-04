@@ -3,7 +3,6 @@
 ![Annie](https://github.com/Programmers-Paradise/.github/blob/main/ChatGPT%20Image%20May%2015,%202025,%2003_58_16%20PM.png?raw=true)
 
 [![PyPI](https://img.shields.io/pypi/v/rust-annie.svg)](https://pypi.org/project/rust-annie)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/Programmers-Paradise/Annie/CodeQL.yml?branch=main&label=CodeQL)](https://github.com/Programmers-Paradise/Annie/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Benchmark](https://img.shields.io/badge/benchmark-online-blue.svg)](https://arnavk23.github.io/Annie/)
 [![GPU Support](https://img.shields.io/badge/GPU-CUDA-green.svg)](./#gpu-acceleration)
