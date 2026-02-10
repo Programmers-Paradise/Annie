@@ -513,3 +513,30 @@ pip install rust-annie[gpu]
 # Or build from source with GPU features
 maturin develop --release --features gpu
 ```
+
+## Code Changes
+
+The library has been updated to use the `rand` crate version `0.10.0`. This update ensures compatibility with the latest features and improvements in the `rand` ecosystem. Users should verify that their code is compatible with this version.
+
+```diff
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -19,7 +19,7 @@ bincode = "1.3.3"
+ rayon = "1.11.0"
+ lazy_static = { version = "1.4.0", optional = true }
+ bit-vec = { version = "0.8.0", features = ["serde"] }
+-rand = "0.9.0"
++rand = "0.10.0"
+ criterion = { version = "0.8.1", optional = true }
+ 
+ # GPU backends
+@@ -45,7 +45,7 @@ members = [".", "fuzz", "rust_annie_macros/foo"]
+ 
+ [dev-dependencies]
+ criterion = "0.8"
+-rand = "0.9"
++rand = "0.10"
+```
+
+This change may affect random number generation and related functionalities. Users should review their code to ensure compatibility with the new version of the `rand` crate.

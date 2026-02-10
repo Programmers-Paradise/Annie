@@ -189,3 +189,7 @@ The introduction of the `python3-dll-a` dependency may affect thread safety or i
 ### Criterion Update
 
 The `criterion` dependency has been updated to version 0.8.0. Ensure that any performance testing or examples using `criterion` are compatible with this new version. This update may include changes in benchmarking features or API usage, so review the `criterion` documentation for any necessary adjustments.
+
+### Rand Crate Update
+
+The `rand` crate has been updated to version 0.10.0. Ensure that any random number generation in examples or tests is compatible with this new version. This update may include changes in API usage, so review the `rand` documentation for any necessary adjustments.
