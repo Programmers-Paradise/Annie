@@ -540,3 +540,140 @@ diff --git a/Cargo.toml b/Cargo.toml
 ```
 
 This change may affect random number generation and related functionalities. Users should review their code to ensure compatibility with the new version of the `rand` crate.
+    
+```diff
+diff --git a/Cargo.lock b/Cargo.lock
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -250,6 +250,12 @@ version = "1.0.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+ 
++[[package]]
++name = "cfg_aliases"
++version = "0.2.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
++
+ [[package]]
+ name = "chacha20"
+ version = "0.10.0"
+@@ -661,9 +667,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "hnsw_rs"
+-version = "0.3.3"
++version = "0.3.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "22884c1debedfe585612f1f6da7bfe257f557639143cac270a8ac2f8702de750"
++checksum = "43a5258f079b97bf2e8311ff9579e903c899dcbac0d9a138d62e9a066778bd07"
+ dependencies = [
+  "anndists",
+  "anyhow",
+@@ -904,15 +910,6 @@ version = "2.7.6"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
+ 
+-[[package]]
+-name = "memoffset"
+-version = "0.7.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+-dependencies = [
+- "autocfg",
+-]
+-
+ [[package]]
+ name = "memoffset"
+ version = "0.9.1"
+@@ -936,17 +933,17 @@ checksum = "e53debba6bda7a793e5f99b8dacf19e626084f525f7829104ba9898f367d85ff"
+ 
+ [[package]]
+ name = "mmap-rs"
+-version = "0.6.1"
++version = "0.7.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "86968d85441db75203c34deefd0c88032f275aaa85cee19a1dcfff6ae9df56da"
++checksum = "4ecce9d566cb9234ae3db9e249c8b55665feaaf32b0859ff1e27e310d2beb3d8"
+ dependencies = [
+- "bitflags 1.3.2",
++ "bitflags 2.10.0",
+  "combine",
+  "libc",
+  "mach2",
+  "nix",
+  "sysctl",
+- "thiserror 1.0.69",
++ "thiserror 2.0.18",
+  "widestring",
+  "windows",
+ ]
+@@ -968,15 +965,14 @@ dependencies = [
+ 
+ [[package]]
+ name = "nix"
+-version = "0.26.4"
++version = "0.30.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
++checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+ dependencies = [
+- "bitflags 1.3.2",
++ "bitflags 2.10.0",
+  "cfg-if",
++ "cfg_aliases",
+  "libc",
+- "memoffset 0.7.1",
+- "pin-utils",
+ ]
+ 
+ [[package]]
+@@ -1094,12 +1090,6 @@ dependencies = [
+  "windows-link",
+ ]
+ 
+-[[package]]
+-name = "pin-utils"
+-version = "0.1.0"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
+-
+ [[package]]
+ name = "plotters"
+ version = "0.3.7"
+@@ -1179,7 +1169,7 @@ checksum = "8970a78afe0628a3e3430376fc5fd76b6b45c4d43360ffd6cdd40bdde72b682a"
+ dependencies = [
+  "indoc",
+  "libc",
+- "memoffset 0.9.1",
++ "memoffset",
+  "once_cell",
+  "portable-atomic",
+  "pyo3-build-config",
+@@ -1554,9 +1544,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "sysctl"
+-version = "0.5.5"
++version = "0.6.0"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "ec7dddc5f0fee506baf8b9fdb989e242f17e4b11c61dfbb0635b705217199eea"
++checksum = "01198a2debb237c62b6826ec7081082d951f46dbb64b0e8c7649a452230d1dfc"
+ dependencies = [
+  "bitflags 2.10.0",
+  "byteorder",
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
+ 
+ rust_annie_macros = { path = "rust_annie_macros/foo" }
+ pyo3 = { version = "0.25.0" }
+-hnsw_rs = "0.3.3"
++hnsw_rs = "0.3.4"
+ numpy = "0.25.0"
+ ndarray = "0.16.1"
+ serde = { version = "1.0.228", features = ["derive"] }
+```
+
+This change may affect random number generation and related functionalities. Users should review their code to ensure compatibility with the new version of the `rand` crate.
