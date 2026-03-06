@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 rust_annie_macros = { path = "rust_annie_macros/foo" }
 pyo3 = { version = "0.25.0" }
-hnsw_rs = "0.3.3"
+hnsw_rs = "0.3.4"
 numpy = "0.25.0"
 ndarray = "0.16.1"
 serde = { version = "1.0.228", features = ["derive"] }
