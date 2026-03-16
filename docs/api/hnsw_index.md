@@ -525,7 +525,7 @@ diff --git a/Cargo.toml b/Cargo.toml
 @@ -19,7 +19,7 @@ bincode = "1.3.3"
  rayon = "1.11.0"
  lazy_static = { version = "1.4.0", optional = true }
- bit-vec = { version = "0.8.0", features = ["serde"] }
+ bit-vec = { version = "0.9.1", features = ["serde"] }
 -rand = "0.9.0"
 +rand = "0.10.0"
  criterion = { version = "0.8.1", optional = true }
@@ -540,3 +540,23 @@ diff --git a/Cargo.toml b/Cargo.toml
 ```
 
 This change may affect random number generation and related functionalities. Users should review their code to ensure compatibility with the new version of the `rand` crate.
+
+```diff
+diff --git a/Cargo.lock b/Cargo.lock
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -160,9 +160,9 @@ dependencies = [
+ 
+ [[package]]
+ name = "bit-vec"
+-version = "0.8.0"
++version = "0.9.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
++checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
+ dependencies = [
+  "serde",
+ ]
+```
+
+This change updates the `bit-vec` dependency to version `0.9.1`, ensuring compatibility with the latest features and improvements. Users should verify that their code is compatible with this version.
