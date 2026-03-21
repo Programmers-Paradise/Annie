@@ -540,7 +540,7 @@ diff --git a/Cargo.toml b/Cargo.toml
 ```
 
 This change may affect random number generation and related functionalities. Users should review their code to ensure compatibility with the new version of the `rand` crate.
-
+    
 ```diff
 diff --git a/Cargo.lock b/Cargo.lock
 --- a/Cargo.lock
