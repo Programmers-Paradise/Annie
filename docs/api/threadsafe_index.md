@@ -193,3 +193,7 @@ The `criterion` dependency has been updated to version 0.8.0. Ensure that any pe
 ### Rand Crate Update
 
 The `rand` crate has been updated to version 0.10.0. Ensure that any random number generation in examples or tests is compatible with this new version. This update may include changes in API usage, so review the `rand` documentation for any necessary adjustments.
+
+### Bit-Vec Crate Update
+
+The `bit-vec` crate has been updated to version 0.9.1. Ensure that any usage of this crate in the code is compatible with the new version. This update may include changes in API usage, so review the `bit-vec` documentation for any necessary adjustments.
