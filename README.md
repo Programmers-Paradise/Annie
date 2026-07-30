@@ -4,7 +4,6 @@
 
 [![PyPI](https://img.shields.io/pypi/v/rust-annie.svg)](https://pypi.org/project/rust-annie)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Benchmark](https://img.shields.io/badge/benchmark-online-blue.svg)](https://arnavk23.github.io/Annie/)
 [![GPU Support](https://img.shields.io/badge/GPU-CUDA-green.svg)](./#gpu-acceleration)
 [![PyPI Downloads](https://static.pepy.tech/badge/rust-annie)](https://pepy.tech/projects/rust-annie)
 
@@ -197,8 +196,6 @@ neighbors, distances = loaded_index.search(query, k=5)
 | Single Query | 10k × 64 | 0.7 ms | 4× vs NumPy |
 | Batch Query (64) | 10k × 64 | 0.23 ms per query | 12× vs NumPy |
 | HNSW Query | 100k × 128 | 0.05 ms | 56× vs NumPy |
-
-See the [Live Benchmark Dashboard](https://arnavk23.github.io/Annie/) for continuous performance tracking across versions.
 
 ## API Reference
 
