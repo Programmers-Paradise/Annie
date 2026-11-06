@@ -4,12 +4,60 @@ build-backend = "maturin"
 
 [project]
 name = "rust_annie"
-requires-python = ">=3.8"
-classifiers = [
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
-]
 dynamic = ["version"]
+description = "Fast exact and approximate nearest-neighbour search for Python, implemented in Rust"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Arnav Kapoor" }, { name = "Abhinav Shukla" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.21"]
+keywords = ["nearest-neighbor", "knn", "ann", "hnsw", "similarity-search", "vector-search", "rust"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7", "hypothesis>=6"]
+bench = ["hnswlib", "faiss-cpu", "h5py"]
+
+[project.urls]
+Homepage = "https://github.com/Programmers-Paradise/Annie"
+Documentation = "https://github.com/Programmers-Paradise/Annie/tree/main/docs"
+Repository = "https://github.com/Programmers-Paradise/Annie"
+Issues = "https://github.com/Programmers-Paradise/Annie/issues"
+Changelog = "https://github.com/Programmers-Paradise/Annie/blob/main/CHANGELOG.md"
+
 [tool.maturin]
-features = ["python-ext", "python-abi3", "pyo3-import-lib"]
+python-source = "python"
+module-name = "rust_annie._rust_annie"
+features = ["python-ext", "python-abi3"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E731"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["rust_annie"]
+known-local-folder = ["_helpers"]
+
+[tool.ruff.lint.per-file-ignores]
+"*.pyi" = ["UP", "E501"]

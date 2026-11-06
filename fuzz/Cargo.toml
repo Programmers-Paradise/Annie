@@ -14,12 +14,13 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+ndarray = "0.16"
 [dependencies.rust_annie]
 path = ".."
 
 [[bin]]
-name = "fuzz_target_1"
-path = "fuzz_targets/fuzz_target_1.rs"
+name = "input_validation"
+path = "fuzz_targets/input_validation.rs"
 test = false
 doc = false
 bench = false

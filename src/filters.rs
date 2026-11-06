@@ -1,8 +1,7 @@
-use pyo3::prelude::*;
-use pyo3::PyObject;
-use std::collections::HashSet;
-use serde::{Serialize, Deserialize};
 use bit_vec::BitVec;
+use pyo3::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum FilterType {
@@ -12,10 +11,14 @@ pub enum FilterType {
     And(Vec<Filter>),
     Or(Vec<Filter>),
     Not(Box<Filter>),
-    PythonCallback,
 }
 
-#[pyclass]
+/// Predicate restricting which IDs a search may return.
+///
+/// Build filters with the static constructors (`id_range`, `id_set`,
+/// `boolean`) and combine them with `and_`, `or_` and `not_`. A plain Python
+/// callable `f(id) -> bool` can also be passed wherever a filter is accepted.
+#[pyclass(module = "rust_annie")]
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Filter {
     inner: FilterType,
@@ -23,81 +26,73 @@ pub struct Filter {
 
 #[pymethods]
 impl Filter {
+    /// Accept IDs in the inclusive range `[min, max]`.
     #[staticmethod]
     pub fn id_range(min: i64, max: i64) -> Self {
-        Filter { inner: FilterType::IdRange(min, max) }
+        Filter {
+            inner: FilterType::IdRange(min, max),
+        }
     }
 
+    /// Accept only the given IDs.
     #[staticmethod]
     pub fn id_set(ids: Vec<i64>) -> Self {
-        Filter { inner: FilterType::IdSet(ids.into_iter().collect()) }
+        Filter {
+            inner: FilterType::IdSet(ids.into_iter().collect()),
+        }
     }
 
+    /// Accept entries whose storage position `i` has `bits[i] == True`.
+    /// Positions follow insertion order and shift after `compact()`.
     #[staticmethod]
     pub fn boolean(bits: Vec<bool>) -> Self {
         let mut bv = BitVec::from_elem(bits.len(), false);
         for (i, &bit) in bits.iter().enumerate() {
             bv.set(i, bit);
         }
-        Filter { inner: FilterType::Boolean(bv) }
+        Filter {
+            inner: FilterType::Boolean(bv),
+        }
     }
 
+    /// Accept IDs accepted by every filter.
     #[staticmethod]
+    #[pyo3(name = "and_")]
     pub fn and(filters: Vec<Filter>) -> Self {
-        Filter { inner: FilterType::And(filters) }
+        Filter {
+            inner: FilterType::And(filters),
+        }
     }
 
+    /// Accept IDs accepted by any filter.
     #[staticmethod]
+    #[pyo3(name = "or_")]
     pub fn or(filters: Vec<Filter>) -> Self {
-        Filter { inner: FilterType::Or(filters) }
+        Filter {
+            inner: FilterType::Or(filters),
+        }
     }
 
+    /// Accept IDs rejected by `filter`.
     #[staticmethod]
+    #[pyo3(name = "not_")]
+    #[allow(clippy::should_implement_trait)]
     pub fn not(filter: Filter) -> Self {
-        Filter { inner: FilterType::Not(Box::new(filter)) }
+        Filter {
+            inner: FilterType::Not(Box::new(filter)),
+        }
     }
 
-    #[staticmethod]
-    pub fn from_py_callable(_callback: PyObject) -> Self {
-        Filter { inner: FilterType::PythonCallback }
-    }
-
+    /// Whether this filter accepts the entry with the given ID and storage
+    /// position. `index` is only consulted by `Filter.boolean`.
     pub fn accepts(&self, id: i64, index: usize) -> bool {
         match &self.inner {
             FilterType::IdRange(min, max) => id >= *min && id <= *max,
             FilterType::IdSet(ids) => ids.contains(&id),
-            FilterType::Boolean(bits) => {
-                if index < bits.len() {
-                    match bits.get(index) {
-                        Some(val) => val,
-                        None => false,
-                    }
-                } else {
-                    false
-                }
-            }
+            FilterType::Boolean(bits) => bits.get(index).unwrap_or(false),
             FilterType::And(filters) => filters.iter().all(|f| f.accepts(id, index)),
             FilterType::Or(filters) => filters.iter().any(|f| f.accepts(id, index)),
             FilterType::Not(filter) => !filter.accepts(id, index),
-            _ => false, // Callbacks handled separately
         }
-    }
-}
-
-#[allow(dead_code)]
-pub struct PythonFilter {
-    callback: PyObject,
-}
-
-#[allow(dead_code)]
-impl PythonFilter {
-    pub fn new(callback: PyObject) -> Self {
-        PythonFilter { callback }
-    }
-
-    /// Check if the given ID passes the Python filter
-    pub fn accepts(&self, py: Python<'_>, id: i64) -> PyResult<bool> {
-        let result = self.callback.call1(py, (id,))?;
-        result.extract::<bool>(py)
     }
 }

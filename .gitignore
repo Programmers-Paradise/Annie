@@ -71,4 +71,8 @@ docs/_build/
 # Pyenv
 .python-version
 
-*.json
+# Benchmark outputs and build artifacts
+benchmarks/results/
+paper/paper.pdf
+paper/jats/
+*.annie

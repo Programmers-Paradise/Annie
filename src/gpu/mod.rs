@@ -1,11 +1,11 @@
 #[cfg(feature = "cuda")]
 mod cuda;
+mod device;
+mod memory;
+pub mod monitoring;
+mod precision;
 #[cfg(feature = "rocm")]
 mod rocm;
-mod memory;
-mod device;
-mod precision;
-pub mod monitoring;
 
 use thiserror::Error;
 
@@ -68,10 +68,10 @@ pub fn l2_distance_gpu(
             return Err(GpuError::UnsupportedPrecision);
         }
         return cuda::CudaBackend::l2_distance(
-            queries, corpus, dim, n_queries, n_vectors, device_id, precision
+            queries, corpus, dim, n_queries, n_vectors, device_id, precision,
         );
     }
-    
+
     #[cfg(feature = "rocm")]
     {
         if device_id >= rocm::device_count() {
@@ -81,13 +81,13 @@ pub fn l2_distance_gpu(
             return Err(GpuError::UnsupportedPrecision);
         }
         return rocm::RocmBackend::l2_distance(
-            queries, corpus, dim, n_queries, n_vectors, device_id, precision
+            queries, corpus, dim, n_queries, n_vectors, device_id, precision,
         );
     }
-    
+
     Err(GpuError::NoBackend)
 }
 
 pub use device::set_active_device;
-pub use precision::Precision;
 pub use memory::{GpuMemoryPool, MemoryStats};
+pub use precision::Precision;

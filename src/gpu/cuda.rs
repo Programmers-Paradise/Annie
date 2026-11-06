@@ -1,16 +1,15 @@
-use crate::gpu::{GpuBackend, GpuError, Precision};
-use cust::prelude::*;
 use crate::gpu::memory::GpuMemoryPool;
-use lazy_static::lazy_static;
-use std::sync::{Arc, Mutex};
-use half::f16;
-use std::convert::TryInto;
+use crate::gpu::{GpuBackend, GpuError, Precision};
 use bytemuck::{cast_slice, Pod, Zeroable};
+use cust::prelude::*;
+use half::f16;
+use lazy_static::lazy_static;
+use std::convert::TryInto;
+use std::sync::{Arc, Mutex};
 
 // Global memory pool with thread-safe access
 lazy_static! {
-    static ref MEMORY_POOL: Arc<Mutex<GpuMemoryPool>> = 
-        Arc::new(Mutex::new(GpuMemoryPool::new()));
+    static ref MEMORY_POOL: Arc<Mutex<GpuMemoryPool>> = Arc::new(Mutex::new(GpuMemoryPool::new()));
 }
 
 /// CUDA backend implementation
@@ -30,56 +29,65 @@ impl GpuBackend for CudaBackend {
         if queries.is_empty() || corpus.is_empty() {
             return Err(GpuError::InvalidInput("Empty input arrays".to_string()));
         }
-        
+
         if queries.len() != n_queries * dim || corpus.len() != n_vectors * dim {
-            return Err(GpuError::InvalidInput("Input array sizes don't match specified dimensions".to_string()));
+            return Err(GpuError::InvalidInput(
+                "Input array sizes don't match specified dimensions".to_string(),
+            ));
         }
 
         // Set up CUDA context with RAII cleanup
         cust::device::set_device(device_id as u32).map_err(GpuError::Cuda)?;
         let _ctx = cust::quick_init().map_err(GpuError::Cuda)?;
         let stream = Stream::new(StreamFlags::NON_BLOCKING, None).map_err(GpuError::Cuda)?;
-        
+
         // Get kernel
         let (kernel_name, ptx) = get_kernel_and_ptx(precision);
         let module = Module::from_ptx(ptx, &[]).map_err(GpuError::Cuda)?;
         let func = module.get_function(&kernel_name).map_err(GpuError::Cuda)?;
-        
+
         // Convert data to target precision
         let (queries_conv, corpus_conv) = convert_data(queries, corpus, precision)?;
-        
+
         // Validate converted data sizes
         let expected_query_size = n_queries * dim * precision.element_size();
         let expected_corpus_size = n_vectors * dim * precision.element_size();
         if queries_conv.len() != expected_query_size || corpus_conv.len() != expected_corpus_size {
-            return Err(GpuError::InvalidInput("Converted buffer size mismatch".to_string()));
+            return Err(GpuError::InvalidInput(
+                "Converted buffer size mismatch".to_string(),
+            ));
         }
 
         // Use RAII memory management
         let pool = MEMORY_POOL.clone();
         let mut managed_pool = pool.lock().unwrap();
-        
+
         // Get managed buffers that auto-cleanup on drop
-        let mut query_buffer = managed_pool.get_managed_buffer(device_id, queries_conv.len(), precision);
-        let mut corpus_buffer = managed_pool.get_managed_buffer(device_id, corpus_conv.len(), precision);
-        let mut output_buffer = managed_pool.get_managed_buffer(device_id, n_queries * n_vectors * 4, Precision::Fp32); // 4 bytes for f32 output
-        
+        let mut query_buffer =
+            managed_pool.get_managed_buffer(device_id, queries_conv.len(), precision);
+        let mut corpus_buffer =
+            managed_pool.get_managed_buffer(device_id, corpus_conv.len(), precision);
+        let mut output_buffer =
+            managed_pool.get_managed_buffer(device_id, n_queries * n_vectors * 4, Precision::Fp32); // 4 bytes for f32 output
+
         // Copy data to buffers
         query_buffer.as_mut_slice().copy_from_slice(&queries_conv);
         corpus_buffer.as_mut_slice().copy_from_slice(&corpus_conv);
-        
+
         // Release the pool lock before GPU operations
         drop(managed_pool);
-        
+
         // Allocate device buffers with RAII cleanup
         let d_query = DeviceBuffer::from_slice(query_buffer.as_slice()).map_err(GpuError::Cuda)?;
-        let d_corpus = DeviceBuffer::from_slice(corpus_buffer.as_slice()).map_err(GpuError::Cuda)?;
-        let mut d_output = DeviceBuffer::<f32>::zeroed(n_queries * n_vectors).map_err(GpuError::Cuda)?;
-        
+        let d_corpus =
+            DeviceBuffer::from_slice(corpus_buffer.as_slice()).map_err(GpuError::Cuda)?;
+        let mut d_output =
+            DeviceBuffer::<f32>::zeroed(n_queries * n_vectors).map_err(GpuError::Cuda)?;
+
         // Launch kernel
         let block_size = 256;
         let grid_size = ((n_queries * n_vectors + block_size - 1) / block_size) as u32;
-        
+
         unsafe {
             launch!(func<<<grid_size, block_size, 0, stream>>>(
                 d_query.as_device_ptr(),
@@ -88,22 +96,26 @@ impl GpuBackend for CudaBackend {
                 n_queries as i32,
                 n_vectors as i32,
                 dim as i32
-            )).map_err(GpuError::Cuda)?;
+            ))
+            .map_err(GpuError::Cuda)?;
         }
-        
+
         // Wait for completion and copy results
         stream.synchronize().map_err(GpuError::Cuda)?;
-        
+
         let mut results = vec![0.0f32; n_queries * n_vectors];
         d_output.copy_to(&mut results).map_err(GpuError::Cuda)?;
-        
+
         // Buffers automatically cleaned up by RAII Drop implementations
         Ok(results)
     }
-// Refactor: Move device setup, kernel selection, memory management, and kernel launch into separate helper functions or modules to reduce complexity and improve maintainability.
+    // Refactor: Move device setup, kernel selection, memory management, and kernel launch into separate helper functions or modules to reduce complexity and improve maintainability.
 
     fn memory_usage(device_id: usize) -> Result<(usize, usize), GpuError> {
-        MEMORY_POOL.lock().unwrap().memory_usage(device_id)
+        MEMORY_POOL
+            .lock()
+            .unwrap()
+            .memory_usage(device_id)
             .ok_or_else(|| GpuError::Allocation("Device not initialized".into()))
     }
 
@@ -115,9 +127,18 @@ impl GpuBackend for CudaBackend {
 /// Get kernel name and PTX based on precision
 fn get_kernel_and_ptx(precision: Precision) -> (String, &'static str) {
     match precision {
-        Precision::Fp32 => ("l2_distance_fp32".to_string(), include_str!("kernels/l2_kernel_fp32.ptx")),
-        Precision::Fp16 => ("l2_distance_fp16".to_string(), include_str!("kernels/l2_kernel_fp16.ptx")), 
-        Precision::Int8 => ("l2_distance_int8".to_string(), include_str!("kernels/l2_kernel_int8.ptx")),
+        Precision::Fp32 => (
+            "l2_distance_fp32".to_string(),
+            include_str!("kernels/l2_kernel_fp32.ptx"),
+        ),
+        Precision::Fp16 => (
+            "l2_distance_fp16".to_string(),
+            include_str!("kernels/l2_kernel_fp16.ptx"),
+        ),
+        Precision::Int8 => (
+            "l2_distance_int8".to_string(),
+            include_str!("kernels/l2_kernel_int8.ptx"),
+        ),
     }
 }
 
@@ -141,7 +162,9 @@ fn convert_data(
 ) -> Result<(Vec<u8>, Vec<u8>), GpuError> {
     // Validate input arrays are not empty
     if queries.is_empty() || corpus.is_empty() {
-        return Err(GpuError::InvalidInput("Input arrays cannot be empty".to_string()));
+        return Err(GpuError::InvalidInput(
+            "Input arrays cannot be empty".to_string(),
+        ));
     }
 
     match precision {
@@ -155,7 +178,7 @@ fn convert_data(
             // Convert to f16 with bounds checking
             let queries_f16: Vec<f16> = queries.iter().map(|&x| f16::from_f32(x)).collect();
             let corpus_f16: Vec<f16> = corpus.iter().map(|&x| f16::from_f32(x)).collect();
-            
+
             // Use safe bytemuck conversion instead of unsafe raw parts
             let queries_bytes = cast_slice::<f16, u8>(&queries_f16).to_vec();
             let corpus_bytes = cast_slice::<f16, u8>(&corpus_f16).to_vec();
@@ -163,7 +186,8 @@ fn convert_data(
         }
         Precision::Int8 => {
             // Convert to int8 with scaling and clamping
-            let queries_i8: Vec<i8> = queries.iter()
+            let queries_i8: Vec<i8> = queries
+                .iter()
                 .map(|&x| {
                     // Add bounds checking for safety
                     if !x.is_finite() {
@@ -172,7 +196,8 @@ fn convert_data(
                     (x * 127.0).clamp(-128.0, 127.0) as i8
                 })
                 .collect();
-            let corpus_i8: Vec<i8> = corpus.iter()
+            let corpus_i8: Vec<i8> = corpus
+                .iter()
                 .map(|&x| {
                     // Add bounds checking for safety
                     if !x.is_finite() {
@@ -181,7 +206,7 @@ fn convert_data(
                     (x * 127.0).clamp(-128.0, 127.0) as i8
                 })
                 .collect();
-            
+
             // Use safe bytemuck conversion instead of unsafe raw parts
             let queries_bytes = cast_slice::<i8, u8>(&queries_i8).to_vec();
             let corpus_bytes = cast_slice::<i8, u8>(&corpus_i8).to_vec();
@@ -206,17 +231,21 @@ pub fn distribute_data(
 ) -> Result<Vec<(usize, Vec<u8>)>, GpuError> {
     // Validate inputs
     if data.is_empty() || devices.is_empty() {
-        return Err(GpuError::InvalidInput("Data and devices cannot be empty".to_string()));
+        return Err(GpuError::InvalidInput(
+            "Data and devices cannot be empty".to_string(),
+        ));
     }
-    
+
     if data.len() % dim != 0 {
-        return Err(GpuError::InvalidInput("Data length must be divisible by dimension".to_string()));
+        return Err(GpuError::InvalidInput(
+            "Data length must be divisible by dimension".to_string(),
+        ));
     }
 
     let total = data.len() / dim;
     let per_device = total / devices.len();
     let mut distributed = Vec::new();
-    
+
     for (i, &device_id) in devices.iter().enumerate() {
         let start = i * per_device * dim;
         let end = if i == devices.len() - 1 {
@@ -224,19 +253,21 @@ pub fn distribute_data(
         } else {
             (i + 1) * per_device * dim
         };
-        
+
         // Validate bounds
         if start >= data.len() || end > data.len() {
-            return Err(GpuError::InvalidInput("Invalid data chunk bounds".to_string()));
+            return Err(GpuError::InvalidInput(
+                "Invalid data chunk bounds".to_string(),
+            ));
         }
-        
+
         let device_data = &data[start..end];
         // Use safe bytemuck conversion instead of unsafe raw parts
         let bytes = cast_slice::<f32, u8>(device_data).to_vec();
-        
+
         distributed.push((device_id, bytes));
     }
-    
+
     Ok(distributed)
 }
 
@@ -250,25 +281,25 @@ pub fn multi_gpu_search(
 ) -> Result<Vec<(usize, f32)>, GpuError> {
     let mut all_results = Vec::new();
     let mut streams = Vec::new();
-    
+
     // Create a stream per device
     for (device_id, _) in data_chunks {
         cust::device::set_device(*device_id as u32)?;
         streams.push(Stream::new(StreamFlags::NON_BLOCKING, None)?);
     }
-    
+
     // Launch searches in parallel
     let mut futures = Vec::new();
     for ((device_id, data), stream) in data_chunks.iter().zip(streams.iter()) {
         cust::device::set_device(*device_id as u32)?;
-        
+
         // Convert query to target precision
         let query_conv = match precision {
             Precision::Fp32 => query.to_vec(),
             Precision::Fp16 => query.iter().map(|&x| f16::from_f32(x).to_f32()).collect(),
             Precision::Int8 => query.iter().map(|&x| (x * 127.0) as f32).collect(),
         };
-        
+
         let n_vectors = data.len() / (dim * precision.element_size());
         let future = CudaBackend::l2_distance(
             &query_conv,
@@ -279,29 +310,30 @@ pub fn multi_gpu_search(
             *device_id,
             precision,
         );
-        
+
         futures.push(future);
     }
-    
+
     // Collect results
     for (i, future) in futures.into_iter().enumerate() {
         let (device_id, _) = &data_chunks[i];
         cust::device::set_device(*device_id as u32)?;
-        
+
         let mut distances = future?;
         let start_idx = i * (data_chunks[0].1.len() / (dim * precision.element_size()));
-        
+
         all_results.extend(
-            distances.into_iter()
+            distances
+                .into_iter()
                 .enumerate()
-                .map(|(j, d)| (start_idx + j, d))
+                .map(|(j, d)| (start_idx + j, d)),
         );
     }
-    
+
     // Merge results and select top-k
     all_results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     all_results.truncate(k);
-    
+
     Ok(all_results)
 }
 
@@ -317,7 +349,7 @@ pub fn get_memory_stats(device_id: usize) -> Result<GpuMemoryStats, GpuError> {
     cust::device::set_device(device_id as u32)?;
     let ctx = cust::quick_init()?;
     let (free, total) = ctx.get_mem_info().map_err(GpuError::Cuda)?;
-    
+
     Ok(GpuMemoryStats {
         total: total as usize,
         free: free as usize,
@@ -330,17 +362,17 @@ pub fn warmup_kernels(device_id: usize) -> Result<(), GpuError> {
     cust::device::set_device(device_id as u32)?;
     let ctx = cust::quick_init()?;
     let stream = Stream::new(StreamFlags::NON_BLOCKING, None)?;
-    
+
     // Warmup dummy kernel
     let ptx = include_str!("kernels/l2_kernel_fp32.ptx");
     let module = Module::from_ptx(ptx, &[])?;
     let func = module.get_function("l2_distance_fp32")?;
-    
+
     // Dummy buffers
     let dummy_data = [0.0f32; 16];
     let d_data = DeviceBuffer::from_slice(&dummy_data)?;
     let mut d_out = DeviceBuffer::<f32>::zeroed(1)?;
-    
+
     unsafe {
         launch!(func<<<1, 1, 0, stream>>>(
             d_data.as_device_ptr(),
@@ -351,7 +383,7 @@ pub fn warmup_kernels(device_id: usize) -> Result<(), GpuError> {
             1
         ))?;
     }
-    
+
     stream.synchronize()?;
     Ok(())
 }

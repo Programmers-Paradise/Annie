@@ -1,5 +1,5 @@
-use hip_runtime::{hip, memory::DeviceBuffer, stream::Stream};
 use crate::gpu::GpuError;
+use hip_runtime::{hip, memory::DeviceBuffer, stream::Stream};
 
 pub struct RocmBackend;
 
@@ -35,15 +35,16 @@ impl super::GpuBackend for RocmBackend {
 
         // Launch kernel
         // Query the maximum threads per block for the device
-        let max_threads_per_block = hip::Device::current()?.get_attribute(hip::DeviceAttribute::MaxThreadsPerBlock)? as u32;
-        
+        let max_threads_per_block =
+            hip::Device::current()?.get_attribute(hip::DeviceAttribute::MaxThreadsPerBlock)? as u32;
+
         // Cap block_size to the device limit and adjust grid_size accordingly
         let block_size = std::cmp::min(n_vectors as u32, max_threads_per_block);
         let grid_size_x = n_queries as u32;
         let grid_size_y = ((n_vectors as u32 + block_size - 1) / block_size);
-        
+
         let stream = Stream::new(hip::StreamFlags::NON_BLOCKING, None)?;
-        
+
         unsafe {
             kernel.launch(
                 &mut args as *mut _ as *mut *mut _,

@@ -1,10 +1,10 @@
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use std::sync::RwLock;
-use std::io::{Read, Write};
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use std::io::{Read, Write};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::time::{Duration, Instant};
 
 /// Simplified metrics collector for monitoring ANN index performance
 #[derive(Debug, Clone)]
@@ -21,6 +21,8 @@ pub struct MetricsCollector {
     pub distance_metric: Arc<RwLock<String>>,
     /// Start time for uptime calculation
     pub start_time: Instant,
+    /// Most recent externally reported recall@k values, keyed by k
+    pub recall_estimates: Arc<RwLock<std::collections::BTreeMap<usize, f64>>>,
 }
 
 impl Default for MetricsCollector {
@@ -38,16 +40,18 @@ impl MetricsCollector {
             dimensions: Arc::new(AtomicUsize::new(0)),
             distance_metric: Arc::new(RwLock::new("unknown".to_string())),
             start_time: Instant::now(),
+            recall_estimates: Arc::new(RwLock::new(std::collections::BTreeMap::new())),
         }
     }
 
     /// Record a query with its latency
     pub fn record_query(&self, latency: Duration) {
         let latency_us = latency.as_micros() as u64;
-        
+
         // Update counters
         self.query_count.fetch_add(1, Ordering::Relaxed);
-        self.total_query_latency_us.fetch_add(latency_us, Ordering::Relaxed);
+        self.total_query_latency_us
+            .fetch_add(latency_us, Ordering::Relaxed);
     }
 
     /// Set index metadata
@@ -81,13 +85,19 @@ impl MetricsCollector {
             dimensions: self.dimensions.load(Ordering::Relaxed),
             distance_metric,
             uptime_seconds: self.start_time.elapsed().as_secs(),
+            recall_estimates: self
+                .recall_estimates
+                .read()
+                .map(|r| r.iter().map(|(k, v)| (*k, *v)).collect())
+                .unwrap_or_default(),
         }
     }
 
-    /// Update recall estimate (simplified - just a placeholder)
-    pub fn update_recall_estimate(&self, _k: usize, _recall: f64) {
-        // In the simplified version, we don't store recall estimates
-        // This is just a placeholder to maintain API compatibility
+    /// Record the most recent recall@k measurement for `k`.
+    pub fn update_recall_estimate(&self, k: usize, recall: f64) {
+        if let Ok(mut r) = self.recall_estimates.write() {
+            r.insert(k, recall);
+        }
     }
 
     /// Generate Prometheus format metrics
@@ -115,9 +125,14 @@ impl MetricsCollector {
         output.push_str("# TYPE annie_queries_total counter\n");
         output.push_str(&format!("annie_queries_total {}\n", query_count));
 
-        output.push_str("# HELP annie_query_latency_microseconds_avg Average query latency in microseconds\n");
+        output.push_str(
+            "# HELP annie_query_latency_microseconds_avg Average query latency in microseconds\n",
+        );
         output.push_str("# TYPE annie_query_latency_microseconds_avg gauge\n");
-        output.push_str(&format!("annie_query_latency_microseconds_avg {:.2}\n", avg_latency_us));
+        output.push_str(&format!(
+            "annie_query_latency_microseconds_avg {:.2}\n",
+            avg_latency_us
+        ));
 
         output.push_str("# HELP annie_index_size Number of vectors in the index\n");
         output.push_str("# TYPE annie_index_size gauge\n");
@@ -131,9 +146,22 @@ impl MetricsCollector {
         output.push_str("# TYPE annie_uptime_seconds gauge\n");
         output.push_str(&format!("annie_uptime_seconds {}\n", uptime_seconds));
 
+        if let Ok(r) = self.recall_estimates.read() {
+            if !r.is_empty() {
+                output.push_str("# HELP annie_recall_estimate Most recent reported recall@k\n");
+                output.push_str("# TYPE annie_recall_estimate gauge\n");
+                for (k, v) in r.iter() {
+                    output.push_str(&format!("annie_recall_estimate{{k=\"{}\"}} {}\n", k, v));
+                }
+            }
+        }
+
         output.push_str("# HELP annie_distance_metric Distance metric used\n");
         output.push_str("# TYPE annie_distance_metric gauge\n");
-        output.push_str(&format!("annie_distance_metric{{metric=\"{}\"}} 1\n", distance_metric));
+        output.push_str(&format!(
+            "annie_distance_metric{{metric=\"{}\"}} 1\n",
+            distance_metric
+        ));
 
         output
     }
@@ -148,6 +176,7 @@ pub struct MetricsSnapshot {
     pub dimensions: usize,
     pub distance_metric: String,
     pub uptime_seconds: u64,
+    pub recall_estimates: std::collections::HashMap<usize, f64>,
 }
 
 /// Simple HTTP server for metrics endpoint
@@ -163,8 +192,8 @@ impl MetricsServer {
 
     /// Start the metrics server in a background thread
     pub fn start(&self) -> std::io::Result<()> {
-        use std::thread;
         use std::net::TcpListener;
+        use std::thread;
 
         let listener = TcpListener::bind(format!("127.0.0.1:{}", self.port))?;
         let metrics = Arc::clone(&self.metrics);
@@ -192,7 +221,10 @@ impl MetricsServer {
         Ok(())
     }
 
-    fn handle_request(mut stream: std::net::TcpStream, metrics: Arc<MetricsCollector>) -> std::io::Result<()> {
+    fn handle_request(
+        mut stream: std::net::TcpStream,
+        metrics: Arc<MetricsCollector>,
+    ) -> std::io::Result<()> {
         let mut buffer = [0; 1024];
         let _ = stream.read(&mut buffer)?; // Request read
 
@@ -236,9 +268,12 @@ impl PyMetricsCollector {
     /// Enable metrics endpoint on specified port
     fn enable_metrics(&mut self, port: u16) -> PyResult<()> {
         let server = MetricsServer::new(Arc::clone(&self.inner), port);
-        server.start().map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
-            format!("Failed to start metrics server: {}", e)
-        ))?;
+        server.start().map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to start metrics server: {}",
+                e
+            ))
+        })?;
         self.server = Some(server);
         Ok(())
     }
@@ -260,13 +295,13 @@ impl PyMetricsCollector {
         dict.set_item("index_size", metrics.index_size.load(Ordering::Relaxed))?;
         dict.set_item("dimensions", metrics.dimensions.load(Ordering::Relaxed))?;
         dict.set_item("uptime_seconds", metrics.start_time.elapsed().as_secs())?;
-        
+
         let distance_metric = match metrics.distance_metric.read() {
             Ok(metric) => metric.clone(),
             Err(_) => "unknown".to_string(),
         };
         dict.set_item("distance_metric", distance_metric)?;
-        
+
         Ok(dict.into())
     }
 

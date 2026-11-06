@@ -1,7 +1,9 @@
 // src/errors.rs
-use std::sync::PoisonError;
-use pyo3::exceptions::{PyException, PyIOError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{
+    PyIOError, PyMemoryError, PyNotImplementedError, PyRuntimeError, PyTypeError, PyValueError,
+};
 use pyo3::PyErr;
+use std::sync::PoisonError;
 use thiserror::Error;
 
 /// A standardized error type for the ANN library, with context and chaining.
@@ -38,12 +40,28 @@ pub enum BackendCreationError {
 }
 
 impl RustAnnError {
-    /// Create a generic Python exception (`Exception`) with the error type and error message.
+    /// Create a Python exception for the given error category.
+    ///
+    /// The category is mapped onto the most specific built-in Python exception
+    /// (`ValueError` by default; `OSError` for I/O and path problems,
+    /// `NotImplementedError`, `RuntimeError`, `TypeError`, `MemoryError`), so
+    /// callers can catch errors idiomatically. All of these subclass
+    /// `Exception`, so `except Exception` keeps working.
     pub fn py_err(type_name: impl Into<String>, detail: impl Into<String>) -> PyErr {
-        let safe_type = type_name.into().replace(['\n', '\r', '[', ']'], " ");
+        let type_name = type_name.into();
+        let safe_type = type_name.replace(['\n', '\r', '[', ']'], " ");
         let safe_detail = detail.into().replace(['\n', '\r'], " ");
         let msg = format!("RustAnnError [{}]: {}", safe_type, safe_detail);
-        PyException::new_err(msg)
+        match type_name.as_str() {
+            "NotImplemented" => PyNotImplementedError::new_err(msg),
+            "IOError" | "InvalidPath" => PyIOError::new_err(msg),
+            "LockError" | "ConcurrentModification" | "Reshape Error" => {
+                PyRuntimeError::new_err(msg)
+            }
+            "TypeError" => PyTypeError::new_err(msg),
+            "Excessive Allocation" => PyMemoryError::new_err(msg),
+            _ => PyValueError::new_err(msg),
+        }
     }
     pub fn io_err(msg: impl Into<String>) -> RustAnnError {
         RustAnnError::Io(msg.into())
@@ -80,7 +98,6 @@ pub enum DistanceRegistryError {
     #[error("Metric '{0}' not found")]
     MetricNotFound(String),
 }
-
 
 impl From<BackendCreationError> for PyErr {
     fn from(err: BackendCreationError) -> Self {

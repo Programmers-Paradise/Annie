@@ -1,6 +1,6 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use rust_annie::metrics::{euclidean, cosine, manhattan, chebyshev};
+use rust_annie::metrics::{chebyshev, cosine, euclidean, manhattan};
 
 const QUIET_NAN_MASK: u32 = 0x0040_0000;
 
@@ -11,10 +11,7 @@ fuzz_target!(|data: &[u8]| {
     } else {
         let mid = data.len() / 2;
         let (left, right) = data.split_at(mid);
-        (
-            bytes_to_f32_vec(left),
-            bytes_to_f32_vec(right)
-        )
+        (bytes_to_f32_vec(left), bytes_to_f32_vec(right))
     };
 
     // Ensure vectors are the same length

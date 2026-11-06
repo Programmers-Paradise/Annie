@@ -1355,7 +1355,7 @@ checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
 
 [[package]]
 name = "rust_annie"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "bincode",
  "bit-vec",
@@ -1369,9 +1369,7 @@ dependencies = [
  "ndarray",
  "numpy",
  "pyo3",
- "rand",
  "rayon",
- "rust_annie_macros",
  "serde",
  "thiserror 2.0.21",
 ]
@@ -1381,16 +1379,8 @@ name = "rust_annie-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
+ "ndarray",
  "rust_annie",
-]
-
-[[package]]
-name = "rust_annie_macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.9",
 ]
 
 [[package]]
