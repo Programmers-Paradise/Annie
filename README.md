@@ -118,11 +118,12 @@ assert len(restored) == 97
 ## Performance
 
 Exact search runs in Rust over contiguous memory with vectorised distance kernels,
-in parallel across cores and without holding the GIL. In our measurements it matches
-FAISS's flat index and is 2–9× faster than NumPy. `PyHnswIndex` builds on the
-[`hnsw_rs`](https://crates.io/crates/hnsw_rs) crate; it reaches the same recall as
-hnswlib and FAISS but is 3–7× slower per query, so prefer those libraries when raw HNSW
-throughput is what matters. See
+in parallel across cores and without holding the GIL. In our measurements it is 2–9×
+faster than NumPy and faster than FAISS's flat index for single queries; for large
+batches of queries FAISS (which uses BLAS matrix products) is up to 10× faster.
+`PyHnswIndex` builds on the [`hnsw_rs`](https://crates.io/crates/hnsw_rs) crate; it
+reaches the same recall as hnswlib and FAISS but is 3–7× slower per query, so prefer
+those libraries when raw HNSW throughput is what matters. See
 [docs/benchmarks.md](https://github.com/Programmers-Paradise/Annie/blob/main/docs/benchmarks.md)
 for the numbers and how to reproduce them with
 [`benchmarks/compare.py`](https://github.com/Programmers-Paradise/Annie/blob/main/benchmarks/compare.py).

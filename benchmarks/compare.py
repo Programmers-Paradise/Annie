@@ -77,7 +77,13 @@ def load_dataset(name: str, cache: Path, k: int):
     if not path.exists():
         cache.mkdir(parents=True, exist_ok=True)
         print(f"downloading {URL.format(name)} -> {path}", file=sys.stderr)
-        urllib.request.urlretrieve(URL.format(name), path)
+        # The server rejects urllib's default User-Agent.
+        req = urllib.request.Request(URL.format(name), headers={"User-Agent": "rust-annie-benchmark"})
+        tmp = path.with_suffix(".part")
+        with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
+            while chunk := r.read(1 << 20):
+                f.write(chunk)
+        tmp.rename(path)
     with h5py.File(path, "r") as f:
         train = np.asarray(f["train"], dtype=np.float32)
         test = np.asarray(f["test"], dtype=np.float32)
@@ -256,7 +262,7 @@ def plot(results: list[Result], path: Path):
         rs = sorted(rs, key=lambda r: r.recall)
         ax.plot([r.recall for r in rs], [r.qps_single for r in rs], "o-", label=label)
     ax.set_xlabel(f"Recall@{results[0].k}")
-    ax.set_ylabel("Queries per second (1 thread, log scale)")
+    ax.set_ylabel("Queries per second, one at a time (log scale)")
     ax.set_yscale("log")
     ax.set_title(results[0].dataset)
     ax.grid(True, which="both", alpha=0.3)
