@@ -7,6 +7,11 @@ updates:
     groups:
       rust-dependencies:
         patterns: ["*"]
+    ignore:
+      # bincode 3.0.0 is a tombstone release (compile_error only) after the
+      # project was discontinued; 2.x changes the encoding of saved indexes.
+      - dependency-name: bincode
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -14,3 +19,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # Pinned on purpose: the MSRV job must test the minimum supported Rust.
+      - dependency-name: dtolnay/rust-toolchain
