@@ -97,6 +97,9 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+          # Remove this line to switch to trusted publishing once a trusted
+          # publisher for this workflow is configured on PyPI.
+          password: ${{ secrets.PYPI_API_TOKEN }}
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
