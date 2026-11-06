@@ -1,4 +1,4 @@
-use rust_annie::metrics::{euclidean, cosine, manhattan, chebyshev};
+use rust_annie::metrics::{chebyshev, cosine, euclidean, manhattan};
 
 fn approx_eq(a: f32, b: f32, tol: f32) -> bool {
     (a - b).abs() < tol
