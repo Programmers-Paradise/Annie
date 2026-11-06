@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: "rust-annie: exact and approximate nearest-neighbour search for Python, implemented in Rust"
+type: software
+authors:
+  - family-names: Kapoor
+    given-names: Arnav
+    orcid: "https://orcid.org/0009-0007-9818-7908"
+    affiliation: "Indian Institute of Science Education and Research Bhopal"
+  - family-names: Shukla
+    given-names: Abhinav
+    affiliation: "Chhattisgarh Swami Vivekanand Technical University"
+repository-code: "https://github.com/Programmers-Paradise/Annie"
+url: "https://github.com/Programmers-Paradise/Annie"
+license: MIT
+version: 0.3.0
+keywords:
+  - nearest neighbour search
+  - k-NN
+  - HNSW
+  - similarity search
+  - Rust
+  - Python
