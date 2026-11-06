@@ -1,641 +1,163 @@
-use pyo3::prelude::*;
-use numpy::{PyReadonlyArray1, PyReadonlyArray2, ToPyArray};
-use ndarray::Array2;
-use rayon::prelude::*;
-use serde::{Serialize, Deserialize};
-use std::sync::{Arc, Mutex};
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use bit_vec::BitVec;
+//! Exact (brute-force) k-nearest-neighbour index.
 
-use crate::backend::AnnBackend;
-use crate::storage::{save_index, load_index};
-use crate::metrics::Distance;
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::Arc;
+use std::time::Instant;
+
+use ndarray::{Array2, ArrayView2};
+use numpy::{AllowTypeChange, PyArrayLike1, PyArrayLike2, ToPyArray};
+use pyo3::prelude::*;
+use rayon::prelude::*;
+
+use crate::distance_registry::get_distance_function_safe;
 use crate::errors::RustAnnError;
 use crate::filters::Filter;
+use crate::metrics::Distance;
 use crate::monitoring::MetricsCollector;
 use crate::path_validation::validate_path_secure;
-#[pyclass]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum MetadataType {
-    Int,
-    Float,
-    String,
-    Tags,
-    Timestamp,
-}
+use crate::search::{self, builtin_distance, l2_norm, top_k};
+use crate::storage::{self, BruteForceData};
 
-#[pymethods]
-impl MetadataType {
-    #[new]
-    fn new() -> Self {
-        MetadataType::String // Default
-    }
-}
+/// Maximum supported vector dimensionality.
+pub const MAX_DIM: usize = 65_536;
 
-#[pyclass]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct MetadataField {
-    #[pyo3(get, set)]
-    pub field_type: MetadataType,
-}
+/// A stored vector: `(id, vector, l2_norm)`.
+pub(crate) type Entry = (i64, Vec<f32>, f32);
 
-#[pymethods]
-impl MetadataField {
-    #[new]
-    fn new(field_type: MetadataType) -> Self {
-        MetadataField { field_type }
-    }
-}
-
-#[pyclass]
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub enum MetadataValue {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Tags(Vec<String>),
-    Timestamp(i64), // Unix timestamp
-}
-
-#[pymethods]
-impl MetadataValue {
-    #[new]
-    fn new() -> Self {
-        MetadataValue::String(String::new()) // Default
-    }
-}
-
-#[pyclass]
-#[derive(Serialize, Deserialize)]
-/// A brute-force k-NN index with cached norms, Rayon parallelism,
-/// built-in filters, and support for multiple distance metrics.
+/// Exact k-nearest-neighbour index using brute-force search.
+///
+/// Every query is compared against every stored vector, so results are exact.
+/// Distance computations are parallelised with Rayon and the GIL is released
+/// while searching with a built-in metric.
+///
+/// Parameters
+/// ----------
+/// dim : int
+///     Dimensionality of the vectors.
+/// metric : Distance, default Distance.EUCLIDEAN
+///     Distance metric used for search.
+#[pyclass(module = "rust_annie")]
 pub struct AnnIndex {
     pub(crate) dim: usize,
     pub(crate) metric: Distance,
-    /// If Some(p), use Minkowski-p distance instead of `metric`.
-    pub(crate) minkowski_p: Option<f32>,
-    /// Stored entries as (id, vector, squared_norm) tuples.
-    pub(crate) entries: Vec<Option<(i64, Vec<f32>, f32)>>,
-    /// Tracks deleted entries for compaction
+    /// Storage slots; `None` marks a removed entry awaiting compaction.
+    pub(crate) entries: Vec<Option<Entry>>,
+    /// Map from user ID to storage slot.
+    pub(crate) slots: HashMap<i64, usize>,
     pub(crate) deleted_count: usize,
-    /// Maximum allowed deleted entries before compaction
     pub(crate) max_deleted_ratio: f32,
-    /// Optional metrics collector for monitoring
-    #[serde(skip)]
-    pub(crate) metrics: Option<Arc<crate::monitoring::MetricsCollector>>,
-    #[serde(skip)]
-    pub(crate) boolean_filters: Mutex<HashMap<String, bit_vec::BitVec>>,
-    #[serde(skip)]
+    pub(crate) metrics: Option<Arc<MetricsCollector>>,
     pub(crate) version: Arc<AtomicU64>,
-    /// Metadata schema: field name -> type
-    pub(crate) metadata_schema: Option<HashMap<String, MetadataType>>,
-    /// Columnar metadata storage: field name -> Vec of values
-    pub(crate) metadata_columns: Option<HashMap<String, Vec<MetadataValue>>>,
 }
 
-#[pymethods]
+// ---------------------------------------------------------------------------
+// Pure-Rust API (usable without the Python bindings)
+// ---------------------------------------------------------------------------
 impl AnnIndex {
-    /// Set metadata schema from Python (dict: str -> MetadataField)
-    pub fn py_set_metadata_schema(&mut self, schema: Bound<'_, pyo3::PyAny>) -> PyResult<()> {
-        use pyo3::types::PyDict;
-        
-        let dict = schema.downcast::<PyDict>()?;
-        
-        let mut schema_map = HashMap::new();
-        for (key, value) in dict.iter() {
-            let field_name: String = key.extract()?;
-            let metadata_field: MetadataField = value.extract()?;
-            schema_map.insert(field_name, metadata_field.field_type);
-        }
-        
-        self.metadata_schema = Some(schema_map);
-        Ok(())
-    }
-
-    /// Add vectors, IDs, and metadata from Python
-    pub fn py_add_with_metadata(&mut self, py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Bound<'_, pyo3::PyAny>) -> PyResult<()> {
-        use pyo3::types::PyList;
-        
-        // Parse metadata list of dictionaries
-        let metadata_list = metadata.downcast::<PyList>()?;
-        
-        let mut parsed_metadata = Vec::new();
-        for item in metadata_list.iter() {
-            let mut meta_dict = HashMap::new();
-            let dict = item.downcast::<pyo3::types::PyDict>()?;
-            
-            for (key, value) in dict.iter() {
-                let field_name: String = key.extract()?;
-                let metadata_value = self.parse_metadata_value(&value)?;
-                meta_dict.insert(field_name, metadata_value);
-            }
-            parsed_metadata.push(meta_dict);
-        }
-        
-        self.add_with_metadata_internal(py, data, ids, parsed_metadata)
-    }
-    
-    /// Helper method to parse Python values into MetadataValue
-    fn parse_metadata_value(&self, value: &Bound<'_, pyo3::PyAny>) -> PyResult<MetadataValue> {
-        // Try extracting different types
-        if let Ok(int_val) = value.extract::<i64>() {
-            return Ok(MetadataValue::Int(int_val));
-        }
-        if let Ok(float_val) = value.extract::<f64>() {
-            return Ok(MetadataValue::Float(float_val));
-        }
-        if let Ok(string_val) = value.extract::<String>() {
-            return Ok(MetadataValue::String(string_val));
-        }
-        if let Ok(list_val) = value.extract::<Vec<String>>() {
-            return Ok(MetadataValue::Tags(list_val));
-        }
-        
-        Err(pyo3::exceptions::PyTypeError::new_err("Unsupported metadata value type"))
-    }
-
-    /// Search with metadata-aware filtering from Python
-    pub fn py_search_filtered(&self, query: Vec<f32>, k: usize, predicate: &str) -> PyResult<(Vec<i64>, Vec<f32>)> {
-        self.search_filtered(query, k, predicate)
-    }
-    
-    /// Search with metadata-aware filtering using a predicate string
-    pub fn search_filtered(&self, query: Vec<f32>, k: usize, _predicate: &str) -> PyResult<(Vec<i64>, Vec<f32>)> {
-        // Simple stub implementation for now - just return normal search results
-        // TODO: Implement full predicate evaluation
-        if query.len() != self.dim {
-            return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, query.len())));
-        }
-        
-        // For now, just do a normal search without filtering 
-        // (predicate evaluation will be added in next iterations)
-        let mut results: Vec<(i64, f32)> = self.entries
-            .iter()
-            .filter_map(|entry_opt| {
-                if let Some((id, vector, _norm)) = entry_opt {
-                    // Simple Euclidean distance
-                    let dist = query.iter().zip(vector.iter())
-                        .map(|(a, b)| (a - b) * (a - b))
-                        .sum::<f32>()
-                        .sqrt();
-                    Some((*id, dist))
-                } else {
-                    None
-                }
-            })
-            .collect();
-            
-        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        let ids = results.iter().take(k).map(|(id, _)| *id).collect();
-        let dists = results.iter().take(k).map(|(_, dist)| *dist).collect();
-        Ok((ids, dists))
-    }
-
-    #[new]
-    /// Create a new index for unit-variant metrics.
-    pub fn new(dim: usize, metric: Distance) -> PyResult<Self> {
-        const MAX_DIM: usize = 4096;
+    /// Create an empty index. Rust equivalent of `AnnIndex(dim, metric)`.
+    pub fn create(dim: usize, metric: Distance) -> Result<Self, PyErr> {
         if dim == 0 {
-            return Err(RustAnnError::py_err("Invalid Dimension", "Dimension must be > 0"));
+            return Err(RustAnnError::py_err(
+                "Invalid Dimension",
+                "Dimension must be > 0",
+            ));
         }
         if dim > MAX_DIM {
-            return Err(RustAnnError::py_err("Excessive Dimension", format!("Dimension {} exceeds safe limit {}", dim, MAX_DIM)));
+            return Err(RustAnnError::py_err(
+                "Excessive Dimension",
+                format!("Dimension {} exceeds maximum {}", dim, MAX_DIM),
+            ));
+        }
+        if let Distance::Minkowski(p) = metric {
+            if p.is_nan() || p <= 0.0 {
+                return Err(RustAnnError::py_err("Minkowski Error", "`p` must be > 0"));
+            }
         }
         Ok(AnnIndex {
             dim,
             metric,
-            minkowski_p: None,
             entries: Vec::new(),
-            deleted_count: 0,
-            max_deleted_ratio: 0.2, // 20% deleted triggers compaction
-            metrics: None,
-            boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(AtomicU64::new(0)),
-            metadata_schema: None,
-            metadata_columns: None,
-        })
-    }
-
-    #[staticmethod]
-    /// Create a new index with Minkowski-p distance.
-    pub fn new_minkowski(dim: usize, p: f32) -> PyResult<Self> {
-        if dim == 0 {
-            return Err(RustAnnError::py_err("Invalid Dimension", "Dimension must be > 0"));
-        }
-        if p <= 0.0 {
-            return Err(RustAnnError::py_err("Minkowski Error", "`p` must be > 0 for Minkowski distance"));
-        }
-        Ok(AnnIndex {
-            dim,
-            metric: Distance::Minkowski(p),
-            minkowski_p: Some(p),
-            entries: Vec::new(),
+            slots: HashMap::new(),
             deleted_count: 0,
             max_deleted_ratio: 0.2,
             metrics: None,
-            boolean_filters: Mutex::new(HashMap::new()),
             version: Arc::new(AtomicU64::new(0)),
-            metadata_schema: None,
-            metadata_columns: None,
         })
     }
 
-    #[staticmethod]
-    /// Create a new index with a named metric.
-    pub fn new_with_metric(dim: usize, metric_name: &str) -> PyResult<Self> {
-        if dim == 0 {
-            return Err(RustAnnError::py_err("Invalid Dimension", "Dimension must be > 0"));
-        }
-        let metric = Distance::new(metric_name);
-        Ok(AnnIndex {
-            dim,
-            metric,
-            minkowski_p: None,
-            entries: Vec::new(),
-            deleted_count: 0,
-            max_deleted_ratio: 0.2,
-            metrics: None,
-            boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(AtomicU64::new(0)),
-            metadata_schema: None,
-            metadata_columns: None,
-        })
-    }
-
-    /// Add vectors and IDs in batch.
-    pub fn add(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>) -> PyResult<()> {
-        // Validate IDs: no negative values
-        let ids_slice = ids.as_slice()?;
-        if ids_slice.iter().any(|&id| id < 0) {
-            return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
-        }
-        self.add_batch_internal(data, ids, None)
-    }
-
-    /// Add vectors, IDs, and metadata in batch.
-    pub fn add_with_metadata_internal(&mut self, _py: Python, data: PyReadonlyArray2<f32>, ids: PyReadonlyArray1<i64>, metadata: Vec<HashMap<String, MetadataValue>>) -> PyResult<()> {
-        let ids_slice = ids.as_slice()?;
-        if ids_slice.iter().any(|&id| id < 0) {
-            return Err(RustAnnError::py_err("Invalid ID", "IDs must be non-negative"));
-        }
-        let n = ids_slice.len();
-        if metadata.len() != n {
-            return Err(RustAnnError::py_err("Metadata Mismatch", "Metadata length must match number of vectors"));
-        }
-        // Validate schema
-        if let Some(schema) = &self.metadata_schema {
-            for meta in &metadata {
-                for (field, value) in meta {
-                    if let Some(expected_type) = schema.get(field) {
-                        let valid = match (expected_type, value) {
-                            (MetadataType::Int, MetadataValue::Int(_)) => true,
-                            (MetadataType::Float, MetadataValue::Float(_)) => true,
-                            (MetadataType::String, MetadataValue::String(_)) => true,
-                            (MetadataType::Tags, MetadataValue::Tags(_)) => true,
-                            (MetadataType::Timestamp, MetadataValue::Timestamp(_)) => true,
-                            _ => false,
-                        };
-                        if !valid {
-                            return Err(RustAnnError::py_err("Metadata Type Error", format!("Field '{}' type mismatch", field)));
-                        }
-                    } else {
-                        return Err(RustAnnError::py_err("Unknown Metadata Field", format!("Field '{}' not in schema", field)));
-                    }
-                }
-            }
-        }
-        // Store metadata column-wise
-        if self.metadata_columns.is_none() {
-            self.metadata_columns = Some(HashMap::new());
-        }
-        let columns = self.metadata_columns.as_mut().unwrap();
-        if let Some(schema) = &self.metadata_schema {
-            for (field, field_type) in schema {
-                let mut col: Vec<MetadataValue> = Vec::with_capacity(n);
-                for meta in &metadata {
-                    if let Some(val) = meta.get(field) {
-                        col.push(val.clone());
-                    } else {
-                        // Default value for missing field
-                        col.push(match field_type {
-                            MetadataType::Int => MetadataValue::Int(0),
-                            MetadataType::Float => MetadataValue::Float(0.0),
-                            MetadataType::String => MetadataValue::String(String::new()),
-                            MetadataType::Tags => MetadataValue::Tags(Vec::new()),
-                            MetadataType::Timestamp => MetadataValue::Timestamp(0),
-                        });
-                    }
-                }
-                columns.entry(field.clone()).or_insert(col);
-            }
-        }
-        // Add vectors and IDs as usual
-        self.add_batch_internal(data, ids, None)
-    }
-
-    /// Add vectors and IDs in batch with progress reporting.
-    /// The callback should be a callable that takes two integers: (current, total)
-    pub fn add_batch_with_progress(
-        &mut self,
-    _py: Python,
-        data: PyReadonlyArray2<f32>,
-        ids: PyReadonlyArray1<i64>,
-        progress_callback: PyObject
-    ) -> PyResult<()> {
-        self.add_batch_internal(data, ids, Some(progress_callback))
-    }
-
-    fn add_batch_internal(
-        &mut self,
-        data: PyReadonlyArray2<f32>,
-        ids: PyReadonlyArray1<i64>,
-        _progress_callback: Option<PyObject>
-    ) -> PyResult<()> {
-        let view = data.as_array();
-        let ids = ids.as_slice()?;
-        let n = view.nrows();
-        const MAX_ROWS: usize = 1_000_000;
-        if n != ids.len() {
-            return Err(RustAnnError::py_err("Input Mismatch", "`data` and `ids` must have same length"));
-        }
-        if view.ncols() != self.dim {
-            return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, view.ncols())));
-        }
-        if n > MAX_ROWS {
-            return Err(RustAnnError::py_err("Excessive Allocation", format!("Attempted to add {} vectors, limit is {}", n, MAX_ROWS)));
-        }
-        let active_entries = self.entries.iter().filter(|e| e.is_some()).count();
-        if active_entries + n > MAX_ROWS {
-            return Err(RustAnnError::py_err("Excessive Allocation", format!("Total active entries would exceed safe limit {}", MAX_ROWS)));
-        }
-
-        // Check for duplicate IDs
-        let existing_ids: HashSet<i64> = self.entries
-            .par_iter()
-            .with_min_len(1000)
-            .filter_map(|e| e.as_ref().map(|(id, _, _)| *id))
-            .collect();
-        let duplicates: Vec<_> = ids.iter()
-            .filter(|id| existing_ids.contains(id))
-            .copied()
-            .collect();
-        if !duplicates.is_empty() {
-            return Err(RustAnnError::py_err("Duplicate IDs", format!("Found duplicate IDs: {:?}", duplicates)));
-        }
-
-        // Reserve and insert entries with computed squared norms
-        self.entries.reserve(n);
-        for (row_idx, id) in ids.iter().enumerate() {
-            let row = view.row(row_idx);
-            let vec: Vec<f32> = row.to_vec();
-            let sq_norm: f32 = vec.iter().map(|x| x * x).sum();
-            self.entries.push(Some((*id, vec, sq_norm)));
-        }
-
-        // Bump version to signal mutation
+    fn bump_version(&self) {
         self.version.fetch_add(1, AtomicOrdering::Relaxed);
+        if let Some(m) = &self.metrics {
+            m.set_index_metadata(self.slots.len(), self.dim, &self.metric.name());
+        }
+    }
 
+    /// Insert rows of `data` with the given IDs. Validates all input first,
+    /// so a failed call leaves the index unchanged.
+    pub fn add_rows(&mut self, data: ArrayView2<f32>, ids: &[i64]) -> PyResult<()> {
+        search::check_insert(&data, ids, self.dim, |id| self.slots.contains_key(&id))?;
+        self.entries.reserve(ids.len());
+        for (row, &id) in data.rows().into_iter().zip(ids) {
+            let v = row.to_vec();
+            let norm = l2_norm(&v);
+            self.slots.insert(id, self.entries.len());
+            self.entries.push(Some((id, v, norm)));
+        }
+        self.bump_version();
         Ok(())
     }
 
-    /// Set maximum deleted ratio before auto-compaction
-    pub fn set_max_deleted_ratio(&mut self, ratio: f32) -> PyResult<()> {
-        if !(0.0..=1.0).contains(&ratio) {
-            return Err(RustAnnError::py_err(
-                "Invalid Ratio", 
-                "Ratio must be between 0.0 and 1.0"
-            ));
+    /// Remove entries by ID. Raises `KeyError` (and changes nothing) if any ID
+    /// is not present.
+    pub fn remove_ids(&mut self, ids: &[i64]) -> PyResult<()> {
+        let missing: Vec<i64> = ids
+            .iter()
+            .copied()
+            .filter(|id| !self.slots.contains_key(id))
+            .collect();
+        if !missing.is_empty() {
+            return Err(pyo3::exceptions::PyKeyError::new_err(format!(
+                "IDs not found in index: {:?}",
+                missing
+            )));
         }
-        self.max_deleted_ratio = ratio;
-        Ok(())
-    }
-
-    /// Single query search with optional filter.
-    pub fn search(
-        &self,
-        py: Python,
-        query: PyReadonlyArray1<f32>,
-        k: usize,
-        filter: Option<Filter>
-    ) -> PyResult<(PyObject, PyObject)> {
-        if self.entries.is_empty() || self.len() == 0 {
-            return Err(RustAnnError::py_err("EmptyIndex", "Index is empty"));
-        }
-        let q = query.as_slice()?;
-        if q.len() != self.dim {
-            return Err(RustAnnError::py_err(
-                "Dimension Error",
-                format!("Expected dimension {}, got {}", self.dim, q.len()),
-            ));
-        }
-        let q_sq = q.iter().map(|x| x * x).sum::<f32>();
-        let version = self.version.load(AtomicOrdering::Relaxed);
-        let (ids, dists) = self.inner_search(q, q_sq, k, filter.as_ref(), version)?;
-
-        let ids_array = numpy::PyArray1::from_vec(py, ids).into_any();
-        let dists_array = numpy::PyArray1::from_vec(py, dists).into_any();
-
-        Ok((ids_array.unbind(), dists_array.unbind()))
-    }
-
-    /// Batch queries search with optional filter.
-    pub fn search_batch(
-        &self,
-        py: Python,
-        data: PyReadonlyArray2<f32>,
-        k: usize,
-        filter: Option<Filter>
-    ) -> PyResult<(PyObject, PyObject)> {
-        let arr = data.as_array();
-        let n = arr.nrows();
-        if arr.ncols() != self.dim {
-            return Err(RustAnnError::py_err("Dimension Error", format!("Expected shape (N, {}), got (N, {})", self.dim, arr.ncols())));
-        }
-        
-        let _version = self.version.load(AtomicOrdering::Relaxed);
-        let results: Result<Vec<_>, RustAnnError> = py.allow_threads(|| {
-            let filter_ref = filter.as_ref();
-            (0..n).into_par_iter().map(|i| {
-                let row = arr.row(i).to_vec();
-                // Simple search for each row (replacing inner_search call)
-                let mut results: Vec<(i64, f32)> = self.entries
-                    .iter()
-                    .filter_map(|entry_opt| {
-                        if let Some((id, vector, _norm)) = entry_opt {
-                            if let Some(f) = filter_ref {
-                                if !f.accepts(*id, 0) { // Use 0 as index for now
-                                    return None;
-                                }
-                            }
-                            // Simple Euclidean distance
-                            let dist = row.iter().zip(vector.iter())
-                                .map(|(a, b)| (a - b) * (a - b))
-                                .sum::<f32>()
-                                .sqrt();
-                            Some((*id, dist))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                    
-                results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-                let ids: Vec<i64> = results.iter().take(k).map(|(id, _)| *id).collect();
-                let dists: Vec<f32> = results.iter().take(k).map(|(_, dist)| *dist).collect();
-                Ok((ids, dists))
-            }).collect()
-        });
-        
-        let results = results.map_err(|e| e.into_pyerr())?;
-        let (all_ids, all_dists): (Vec<_>, Vec<_>) = results.into_iter().unzip();
-        let ids_arr = Array2::from_shape_vec((n, k), all_ids.concat())
-            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape ids failed: {}", e)))?;
-        let dists_arr = Array2::from_shape_vec((n, k), all_dists.concat())
-            .map_err(|e| RustAnnError::py_err("Reshape Error", format!("Reshape dists failed: {}", e)))?;
-    Ok((ids_arr.to_pyarray(py).into(), dists_arr.to_pyarray(py).into()))
-    }
-
-    /// Save index to file (.bin appended).
-    pub fn save(&self, path: &str) -> PyResult<()> {
-        Self::validate_path(path)?;
-        let full = format!("{}.bin", path);
-        save_index(self, &full).map_err(|e| e.into_pyerr())
-    }
-
-    #[staticmethod]
-    /// Load index from file (.bin appended).
-    pub fn load(path: &str) -> PyResult<Self> {
-        Self::validate_path(path)?;
-        let full = format!("{}.bin", path);
-        load_index(&full).map_err(|e| e.into_pyerr())
-    }
-
-    /// Number of entries.
-    pub fn len(&self) -> usize { 
-        self.entries.iter().filter(|e| e.is_some()).count()
-    }
-    
-    pub fn __len__(&self) -> usize { self.len() }
-
-    pub fn capacity(&self) -> usize {
-        self.entries.len()
-    }
-    
-    /// Deleted entry count
-    pub fn deleted_count(&self) -> usize {
-        self.deleted_count
-    }
-    
-    /// Current version
-    pub fn version(&self) -> u64 {
-        self.version.load(AtomicOrdering::Relaxed)
-    }
-
-    /// Remove entries by IDs (not yet implemented)
-    pub fn remove(&mut self, _ids: Vec<i64>) -> PyResult<()> {
-        Err(RustAnnError::py_err("NotImplemented", "Remove operation not yet implemented"))
-    }
-
-    /// Update an entry by ID (not yet implemented)
-    pub fn update(&mut self, _id: i64, _vector: Vec<f32>) -> PyResult<()> {
-        Err(RustAnnError::py_err("NotImplemented", "Update operation not yet implemented"))
-    }
-
-    /// Compact the index by removing deleted entries (not yet implemented)
-    pub fn compact(&mut self) -> PyResult<()> {
-        Err(RustAnnError::py_err("NotImplemented", "Compact operation not yet implemented"))
-    }
-
-    /// Vector dimension.
-    pub fn dim(&self) -> usize { self.dim }
-
-    /// String repr.
-    pub fn __repr__(&self) -> String {
-        let m = if let Some(p) = self.minkowski_p { 
-            format!("Minkowski(p={})", p) 
-        } else { 
-            format!("{:?}", self.metric) 
-        };
-        format!("AnnIndex(dim={}, metric={}, entries={})", self.dim, m, self.entries.len())
-    }
-
-    /// Enable metrics on optional port.
-    pub fn enable_metrics(&mut self, port: Option<u16>) -> PyResult<()> {
-        let metrics = Arc::new(MetricsCollector::new());
-        let metric_name = if let Some(p) = self.minkowski_p { 
-            format!("minkowski_p{}", p) 
-        } else {
-            match &self.metric {
-                Distance::Euclidean() => "euclidean".to_string(),
-                Distance::Cosine() => "cosine".to_string(),
-                Distance::Manhattan() => "manhattan".to_string(),
-                Distance::Chebyshev() => "chebyshev".to_string(),
-                Distance::Minkowski(p) => format!("minkowski_p{}", p),
-                Distance::Hamming() => "hamming".to_string(),
-                Distance::Jaccard() => "jaccard".to_string(),
-                Distance::Angular() => "angular".to_string(),
-                Distance::Canberra() => "canberra".to_string(),
-                Distance::Custom(n) => n.clone(),
+        for id in ids {
+            if let Some(slot) = self.slots.remove(id) {
+                self.entries[slot] = None;
+                self.deleted_count += 1;
             }
-        };
-        metrics.set_index_metadata(self.entries.len(), self.dim, &metric_name);
-        if let Some(p) = port {
-            use crate::monitoring::MetricsServer;
-            let server = MetricsServer::new(Arc::clone(&metrics), p);
-            server.start().map_err(|e| 
-                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to start metrics server: {}", e)))?;
         }
-        self.metrics = Some(metrics);
+        if self.should_compact() {
+            self.compact_entries();
+        }
+        self.bump_version();
         Ok(())
     }
 
-    /// Fetch metrics snapshot.
-    pub fn get_metrics(&self) -> PyResult<Option<PyObject>> {
-        if let Some(metrics) = &self.metrics {
-            let snap = metrics.get_metrics_snapshot();
-            Python::with_gil(|py| {
-                let d = pyo3::types::PyDict::new(py);
-                d.set_item("query_count", snap.query_count)?;
-                d.set_item("avg_query_latency_us", snap.avg_query_latency_us)?;
-                d.set_item("index_size", snap.index_size)?;
-                d.set_item("dimensions", snap.dimensions)?;
-                d.set_item("uptime_seconds", snap.uptime_seconds)?;
-                d.set_item("distance_metric", snap.distance_metric)?;
-                let recall = pyo3::types::PyDict::new(py);
-                d.set_item("recall_estimates", recall)?;
-                Ok(Some(d.into()))
-            })
-        } else {
-            Ok(None)
-        }
+    /// Replace the vector stored under `id`.
+    pub fn update_vector(&mut self, id: i64, vector: &[f32]) -> PyResult<()> {
+        search::check_query(vector, self.dim)?;
+        let slot = *self
+            .slots
+            .get(&id)
+            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(format!("ID {} not found", id)))?;
+        self.entries[slot] = Some((id, vector.to_vec(), l2_norm(vector)));
+        self.bump_version();
+        Ok(())
     }
 
-    /// Update recall for k.
-    pub fn update_recall_estimate(&self, k: usize, recall: f64) -> PyResult<()> {
-        if let Some(metrics) = &self.metrics { 
-            metrics.update_recall_estimate(k, recall); 
-        }
-        Ok(())
-    }
-    
-    /// Update a boolean filter by name
-    pub fn update_boolean_filter(&self, name: String, bits: Vec<bool>) -> PyResult<()> {
-        let mut bv = BitVec::from_elem(bits.len(), false);
-        for (i, &bit) in bits.iter().enumerate() {
-            bv.set(i, bit);
-        }
-        let mut filters = self.boolean_filters.lock()
-            .map_err(|_| RustAnnError::py_err("LockError", "Failed to acquire boolean filters lock"))?;
-        filters.insert(name, bv);
-        Ok(())
-    }
-    
-    /// Get a boolean filter by name
-    pub fn get_boolean_filter(&self, name: &str) -> PyResult<Option<Vec<bool>>> {
-        let filters = self.boolean_filters.lock()
-            .map_err(|_| RustAnnError::py_err("LockError", "Failed to acquire boolean filters lock"))?;
-        Ok(filters.get(name).map(|bv| bv.iter().collect()))
+    /// Drop removed slots and rebuild the ID map.
+    pub fn compact_entries(&mut self) {
+        self.entries.retain(|e| e.is_some());
+        self.slots = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(slot, e)| (e.as_ref().unwrap().0, slot))
+            .collect();
+        self.deleted_count = 0;
     }
 
     fn should_compact(&self) -> bool {
@@ -643,246 +165,566 @@ impl AnnIndex {
         total > 0 && (self.deleted_count as f32 / total as f32) > self.max_deleted_ratio
     }
 
-    pub fn get_info(&self) -> HashMap<String, String> {
-        let mut info = HashMap::new();
-        info.insert("type".to_string(), "brute".to_string());
-        info.insert("dim".to_string(), self.dim.to_string());
-        
-        let metric = if let Some(p) = self.minkowski_p {
-            format!("Minkowski(p={})", p)
-        } else {
-            format!("{:?}", self.metric)
-        };
-        info.insert("metric".to_string(), metric);
-        
-        info.insert("size".to_string(), self.len().to_string());
-        info.insert("capacity".to_string(), self.capacity().to_string());
-        info.insert("deleted_count".to_string(), self.deleted_count.to_string());
-        info.insert("max_deleted_ratio".to_string(), self.max_deleted_ratio.to_string());
-        info.insert("version".to_string(), self.version().to_string());
-        
-        // Calculate memory usage
-        let entry_size = std::mem::size_of::<Option<(i64, Vec<f32>, f32)>>();
-        let entry_overhead = self.entries.capacity() * entry_size;
-        let vector_data = self.len() * self.dim * 4; // 4 bytes per f32
-        let norms = self.len() * 4; // 4 bytes per norm
-        let total_memory = entry_overhead + vector_data + norms;
-        info.insert("memory_bytes".to_string(), total_memory.to_string());
-        
-        info
+    /// Number of live entries.
+    pub fn size(&self) -> usize {
+        self.slots.len()
     }
 
-    /// Validate index integrity
-    pub fn validate(&self) -> PyResult<()> {
-        let mut seen_ids = HashSet::new();
+    /// Distances from `q` to every live entry accepted by `filter`.
+    fn candidates(&self, q: &[f32], filter: Option<&Filter>) -> PyResult<Vec<(i64, f32)>> {
+        let accept = |slot: usize, id: i64| filter.map_or(true, |f| f.accepts(id, slot));
+        if let Distance::Custom(name) = &self.metric {
+            // Custom metrics may call into Python, so evaluate sequentially.
+            let func = get_distance_function_safe(name).map_err(|e| {
+                RustAnnError::py_err(
+                    "Metric Not Found",
+                    format!(
+                        "{}. Register it with rust_annie.register_metric() first.",
+                        e
+                    ),
+                )
+            })?;
+            let mut out = Vec::with_capacity(self.slots.len());
+            for (slot, entry) in self.entries.iter().enumerate() {
+                if let Some((id, v, _)) = entry {
+                    if accept(slot, *id) {
+                        let d = func
+                            .try_distance(q, v)
+                            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
+                        out.push((*id, d));
+                    }
+                }
+            }
+            return Ok(out);
+        }
+        let q_norm = l2_norm(q);
+        Ok(self
+            .entries
+            .par_iter()
+            .with_min_len(1024)
+            .enumerate()
+            .filter_map(|(slot, entry)| {
+                let (id, v, v_norm) = entry.as_ref()?;
+                if !accept(slot, *id) {
+                    return None;
+                }
+                Some((*id, builtin_distance(&self.metric, q, q_norm, v, *v_norm)))
+            })
+            .collect())
+    }
+
+    /// Exact k-NN search for a single query.
+    pub fn search_vec(
+        &self,
+        q: &[f32],
+        k: usize,
+        filter: Option<&Filter>,
+    ) -> PyResult<(Vec<i64>, Vec<f32>)> {
+        search::check_k(k)?;
+        search::check_query(q, self.dim)?;
+        let start = Instant::now();
+        let result = top_k(self.candidates(q, filter)?, k);
+        if let Some(m) = &self.metrics {
+            m.record_query(start.elapsed());
+        }
+        Ok(result)
+    }
+
+    /// Exact k-NN search for a batch of queries. Returns flat row-major
+    /// `(n * k)` buffers padded with `-1` / `inf` where fewer than `k`
+    /// neighbours exist.
+    pub fn search_batch_vec(
+        &self,
+        queries: ArrayView2<f32>,
+        k: usize,
+        filter: Option<&Filter>,
+    ) -> PyResult<(Vec<i64>, Vec<f32>)> {
+        search::check_k(k)?;
+        search::check_queries(&queries, self.dim)?;
+        let n = queries.nrows();
+        let start = Instant::now();
+        let per_query: Vec<(Vec<i64>, Vec<f32>)> = if self.metric.is_custom() {
+            queries
+                .rows()
+                .into_iter()
+                .map(|row| Ok(top_k(self.candidates(&row.to_vec(), filter)?, k)))
+                .collect::<PyResult<_>>()?
+        } else {
+            // Parallelise across queries; scan entries sequentially per query.
+            let accept = |slot: usize, id: i64| filter.map_or(true, |f| f.accepts(id, slot));
+            (0..n)
+                .into_par_iter()
+                .map(|i| {
+                    let q = queries.row(i).to_vec();
+                    let q_norm = l2_norm(&q);
+                    let cands = self
+                        .entries
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(slot, entry)| {
+                            let (id, v, v_norm) = entry.as_ref()?;
+                            if !accept(slot, *id) {
+                                return None;
+                            }
+                            Some((*id, builtin_distance(&self.metric, &q, q_norm, v, *v_norm)))
+                        })
+                        .collect();
+                    top_k(cands, k)
+                })
+                .collect()
+        };
+        let mut ids = Vec::with_capacity(n * k);
+        let mut dists = Vec::with_capacity(n * k);
+        for (i, d) in per_query {
+            search::push_padded(&mut ids, &mut dists, i, d, k);
+        }
+        if let Some(m) = &self.metrics {
+            let elapsed = start.elapsed();
+            for _ in 0..n {
+                m.record_query(elapsed / n.max(1) as u32);
+            }
+        }
+        Ok((ids, dists))
+    }
+
+    /// Turn the Python `filter` argument into a [`Filter`].
+    ///
+    /// Accepts `None`, a `Filter`, or a callable `f(id) -> bool`. Callables are
+    /// evaluated once per live entry before the (parallel) search starts.
+    pub fn resolve_filter(&self, filter: Option<&Bound<'_, PyAny>>) -> PyResult<Option<Filter>> {
+        let Some(obj) = filter else { return Ok(None) };
+        if obj.is_none() {
+            return Ok(None);
+        }
+        if let Ok(f) = obj.extract::<Filter>() {
+            return Ok(Some(f));
+        }
+        if obj.is_callable() {
+            let mut allowed = Vec::new();
+            for entry in self.entries.iter().flatten() {
+                if obj.call1((entry.0,))?.is_truthy()? {
+                    allowed.push(entry.0);
+                }
+            }
+            return Ok(Some(Filter::id_set(allowed)));
+        }
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "filter must be None, a rust_annie.Filter, or a callable taking an id and returning bool",
+        ))
+    }
+
+    /// Serialize to `path`.
+    pub fn save_to(&self, path: &Path) -> PyResult<()> {
+        let data = BruteForceData {
+            dim: self.dim,
+            metric: self.metric.clone(),
+            max_deleted_ratio: self.max_deleted_ratio,
+            entries: self
+                .entries
+                .iter()
+                .flatten()
+                .map(|(id, v, _)| (*id, v.clone()))
+                .collect(),
+        };
+        storage::save_brute(path, &data).map_err(|e| e.into_pyerr())
+    }
+
+    /// Deserialize from `path`.
+    pub fn load_from(path: &Path) -> PyResult<Self> {
+        let data = storage::load_brute(path).map_err(|e| e.into_pyerr())?;
+        let mut idx = AnnIndex::create(data.dim, data.metric)?;
+        idx.max_deleted_ratio = data.max_deleted_ratio;
+        for (id, v) in data.entries {
+            if v.len() != idx.dim || idx.slots.contains_key(&id) {
+                return Err(
+                    RustAnnError::io_err(format!("{} is corrupt", path.display())).into_pyerr(),
+                );
+            }
+            let norm = l2_norm(&v);
+            idx.slots.insert(id, idx.entries.len());
+            idx.entries.push(Some((id, v, norm)));
+        }
+        Ok(idx)
+    }
+
+    pub(crate) fn validate_integrity(&self) -> PyResult<()> {
         let mut errors = Vec::new();
-
-        for (idx, entry) in self.entries.iter().enumerate() {
-            if let Some((id, vec, stored_norm)) = entry {
-                // Check ID uniqueness
-                if !seen_ids.insert(*id) {
-                    errors.push(format!("Duplicate ID found: {}", id));
+        let mut seen = HashSet::new();
+        let mut live = 0;
+        for (slot, entry) in self.entries.iter().enumerate() {
+            if let Some((id, v, norm)) = entry {
+                live += 1;
+                if !seen.insert(*id) {
+                    errors.push(format!("duplicate ID {}", id));
                 }
-
-                // Check vector dimension
-                if vec.len() != self.dim {
+                if v.len() != self.dim {
                     errors.push(format!(
-                        "Vector {} (index {}) has dimension {}, expected {}",
-                        id, idx, vec.len(), self.dim
+                        "ID {} has dimension {}, expected {}",
+                        id,
+                        v.len(),
+                        self.dim
                     ));
                 }
-
-                // Check norm matches vector
-                let computed_norm = vec.iter().map(|x| x * x).sum::<f32>().sqrt();
-                if (computed_norm - *stored_norm).abs() > 0.001 {
-                    errors.push(format!(
-                        "Vector {} (index {}) has norm {} but computed {}",
-                        id, idx, stored_norm, computed_norm
-                    ));
+                if (l2_norm(v) - norm).abs() > 1e-3 * norm.max(1.0) {
+                    errors.push(format!("ID {} has a stale cached norm", id));
+                }
+                if self.slots.get(id) != Some(&slot) {
+                    errors.push(format!("ID {} is missing from the ID map", id));
                 }
             }
         }
-
-        if !errors.is_empty() {
-            return Err(RustAnnError::py_err(
-                "ValidationError",
-                format!("{} issues found:\n{}", errors.len(), errors.join("\n"))
+        if live != self.slots.len() {
+            errors.push(format!(
+                "ID map has {} entries but {} vectors are stored",
+                self.slots.len(),
+                live
             ));
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(RustAnnError::py_err(
+                "ValidationError",
+                format!("{} issues found: {}", errors.len(), errors.join("; ")),
+            ))
+        }
+    }
+
+    pub(crate) fn info(&self) -> HashMap<String, String> {
+        let mut info = HashMap::new();
+        info.insert("type".into(), "brute".into());
+        info.insert("dim".into(), self.dim.to_string());
+        info.insert("metric".into(), self.metric.name());
+        info.insert("size".into(), self.size().to_string());
+        info.insert("capacity".into(), self.entries.len().to_string());
+        info.insert("deleted_count".into(), self.deleted_count.to_string());
+        info.insert(
+            "max_deleted_ratio".into(),
+            self.max_deleted_ratio.to_string(),
+        );
+        info.insert(
+            "version".into(),
+            self.version.load(AtomicOrdering::Relaxed).to_string(),
+        );
+        let memory = self.entries.capacity() * std::mem::size_of::<Option<Entry>>()
+            + self.size() * self.dim * std::mem::size_of::<f32>();
+        info.insert("memory_bytes".into(), memory.to_string());
+        info
+    }
+}
+
+/// Convert flat padded batch buffers to `(n, k)` NumPy arrays.
+pub(crate) fn batch_to_numpy(
+    py: Python<'_>,
+    n: usize,
+    k: usize,
+    ids: Vec<i64>,
+    dists: Vec<f32>,
+) -> PyResult<(PyObject, PyObject)> {
+    let ids = Array2::from_shape_vec((n, k), ids)
+        .map_err(|e| RustAnnError::py_err("Reshape Error", e.to_string()))?;
+    let dists = Array2::from_shape_vec((n, k), dists)
+        .map_err(|e| RustAnnError::py_err("Reshape Error", e.to_string()))?;
+    Ok((
+        ids.to_pyarray(py).into_any().unbind(),
+        dists.to_pyarray(py).into_any().unbind(),
+    ))
+}
+
+pub(crate) fn to_numpy(py: Python<'_>, ids: Vec<i64>, dists: Vec<f32>) -> (PyObject, PyObject) {
+    (
+        numpy::PyArray1::from_vec(py, ids).into_any().unbind(),
+        numpy::PyArray1::from_vec(py, dists).into_any().unbind(),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Python API
+// ---------------------------------------------------------------------------
+#[pymethods]
+impl AnnIndex {
+    #[new]
+    #[pyo3(signature = (dim, metric = Distance::Euclidean()))]
+    pub fn new(dim: usize, metric: Distance) -> PyResult<Self> {
+        Self::create(dim, metric)
+    }
+
+    /// Create an index using Minkowski-p distance.
+    #[staticmethod]
+    pub fn new_minkowski(dim: usize, p: f32) -> PyResult<Self> {
+        Self::create(dim, Distance::Minkowski(p))
+    }
+
+    /// Create an index using a metric looked up by name. Names that are not
+    /// built-in refer to metrics registered with `register_metric`.
+    #[staticmethod]
+    pub fn new_with_metric(dim: usize, metric_name: &str) -> PyResult<Self> {
+        let metric = Distance::new(metric_name);
+        if let Distance::Custom(name) = &metric {
+            get_distance_function_safe(name).map_err(|_| {
+                RustAnnError::py_err(
+                    "Metric Not Found",
+                    format!(
+                        "Unknown metric '{}'. Register it with rust_annie.register_metric() first.",
+                        name
+                    ),
+                )
+            })?;
+        }
+        Self::create(dim, metric)
+    }
+
+    /// Add vectors with integer IDs.
+    ///
+    /// Parameters
+    /// ----------
+    /// data : array_like, shape (n, dim)
+    ///     Vectors to add. Converted to float32.
+    /// ids : array_like, shape (n,)
+    ///     Unique, non-negative integer IDs.
+    pub fn add(
+        &mut self,
+        data: PyArrayLike2<'_, f32, AllowTypeChange>,
+        ids: PyArrayLike1<'_, i64, AllowTypeChange>,
+    ) -> PyResult<()> {
+        let ids = ids.as_array().to_vec();
+        self.add_rows(data.as_array(), &ids)
+    }
+
+    /// Add vectors, calling `progress_callback(done, total)` after each chunk.
+    #[pyo3(signature = (data, ids, progress_callback, chunk_size = 10_000))]
+    pub fn add_batch_with_progress(
+        &mut self,
+        data: PyArrayLike2<'_, f32, AllowTypeChange>,
+        ids: PyArrayLike1<'_, i64, AllowTypeChange>,
+        progress_callback: &Bound<'_, PyAny>,
+        chunk_size: usize,
+    ) -> PyResult<()> {
+        let view = data.as_array();
+        let ids = ids.as_array().to_vec();
+        // Validate everything up front so a failure part-way is impossible.
+        search::check_insert(&view, &ids, self.dim, |id| self.slots.contains_key(&id))?;
+        let total = ids.len();
+        let chunk = chunk_size.max(1);
+        let mut done = 0;
+        while done < total {
+            let end = (done + chunk).min(total);
+            self.add_rows(view.slice(ndarray::s![done..end, ..]), &ids[done..end])?;
+            done = end;
+            progress_callback.call1((done, total))?;
         }
         Ok(())
     }
 
-}
-
-// Private methods implementation (not exposed to Python)
-impl AnnIndex {
-    fn inner_search(
+    /// Find the `k` nearest neighbours of `query`.
+    ///
+    /// Parameters
+    /// ----------
+    /// query : array_like, shape (dim,)
+    /// k : int
+    /// filter : Filter or callable, optional
+    ///     Restrict results to IDs accepted by a `Filter` or by a callable
+    ///     `f(id) -> bool`.
+    ///
+    /// Returns
+    /// -------
+    /// ids : ndarray of int64, shape (m,)
+    /// distances : ndarray of float32, shape (m,)
+    ///     Sorted by increasing distance; `m = min(k, number of matches)`.
+    #[pyo3(signature = (query, k, filter = None))]
+    pub fn search(
         &self,
-        q: &[f32],
-        q_sq: f32,
+        py: Python<'_>,
+        query: PyArrayLike1<'_, f32, AllowTypeChange>,
         k: usize,
-        filter: Option<&Filter>,
-        version: u64,
-    ) -> PyResult<(Vec<i64>, Vec<f32>)> {
-        if version != self.version.load(AtomicOrdering::Relaxed) {
+        filter: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<(PyObject, PyObject)> {
+        let q = query.as_array().to_vec();
+        let filter = self.resolve_filter(filter)?;
+        let (ids, dists) = if self.metric.is_custom() {
+            self.search_vec(&q, k, filter.as_ref())?
+        } else {
+            py.allow_threads(|| self.search_vec(&q, k, filter.as_ref()))?
+        };
+        Ok(to_numpy(py, ids, dists))
+    }
+
+    /// Find the `k` nearest neighbours for each row of `queries`.
+    ///
+    /// Returns `(ids, distances)` arrays of shape `(n, k)`. Rows with fewer
+    /// than `k` matches are padded with id `-1` and distance `inf`.
+    #[pyo3(signature = (queries, k, filter = None))]
+    pub fn search_batch(
+        &self,
+        py: Python<'_>,
+        queries: PyArrayLike2<'_, f32, AllowTypeChange>,
+        k: usize,
+        filter: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<(PyObject, PyObject)> {
+        let view = queries.as_array();
+        let n = view.nrows();
+        let filter = self.resolve_filter(filter)?;
+        let (ids, dists) = if self.metric.is_custom() {
+            self.search_batch_vec(view, k, filter.as_ref())?
+        } else {
+            py.allow_threads(|| self.search_batch_vec(view, k, filter.as_ref()))?
+        };
+        batch_to_numpy(py, n, k, ids, dists)
+    }
+
+    /// Remove vectors by ID. Raises `KeyError` if any ID is missing.
+    pub fn remove(&mut self, ids: Vec<i64>) -> PyResult<()> {
+        self.remove_ids(&ids)
+    }
+
+    /// Replace the vector stored under `id`. Raises `KeyError` if missing.
+    pub fn update(
+        &mut self,
+        id: i64,
+        vector: PyArrayLike1<'_, f32, AllowTypeChange>,
+    ) -> PyResult<()> {
+        let v = vector.as_array().to_vec();
+        self.update_vector(id, &v)
+    }
+
+    /// Reclaim storage left by removed entries. Called automatically once
+    /// the fraction of removed slots exceeds `max_deleted_ratio`.
+    pub fn compact(&mut self) {
+        self.compact_entries();
+        self.bump_version();
+    }
+
+    /// Set the fraction of removed slots (0..1) that triggers auto-compaction.
+    pub fn set_max_deleted_ratio(&mut self, ratio: f32) -> PyResult<()> {
+        if !(0.0..=1.0).contains(&ratio) {
             return Err(RustAnnError::py_err(
-                "ConcurrentModification", 
-                "Index modified during search operation"
+                "Invalid Ratio",
+                "Ratio must be between 0.0 and 1.0",
             ));
         }
+        self.max_deleted_ratio = ratio;
+        Ok(())
+    }
 
-        if q.len() != self.dim {
-            return Err(RustAnnError::py_err("Dimension Error", format!("Expected dimension {}, got {}", self.dim, q.len())));
+    /// Whether `id` is stored in the index.
+    pub fn __contains__(&self, id: i64) -> bool {
+        self.slots.contains_key(&id)
+    }
+
+    /// IDs of all stored vectors, in storage order.
+    pub fn ids(&self, py: Python<'_>) -> PyObject {
+        let ids: Vec<i64> = self.entries.iter().flatten().map(|e| e.0).collect();
+        numpy::PyArray1::from_vec(py, ids).into_any().unbind()
+    }
+
+    /// Save the index to `path` (any file name; nothing is appended).
+    pub fn save(&self, path: &str) -> PyResult<()> {
+        let p = validate_path_secure(path)?;
+        self.save_to(&p)
+    }
+
+    /// Load an index previously written with `save`.
+    #[staticmethod]
+    pub fn load(path: &str) -> PyResult<Self> {
+        let p = validate_path_secure(path)?;
+        Self::load_from(&p)
+    }
+
+    /// Number of stored vectors.
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.size()
+    }
+
+    pub fn __len__(&self) -> usize {
+        self.size()
+    }
+
+    /// Number of storage slots, including removed entries not yet compacted.
+    pub fn capacity(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Number of removed entries awaiting compaction.
+    pub fn deleted_count(&self) -> usize {
+        self.deleted_count
+    }
+
+    /// Counter incremented on every mutation.
+    pub fn version(&self) -> u64 {
+        self.version.load(AtomicOrdering::Relaxed)
+    }
+
+    /// Vector dimensionality.
+    pub fn dim(&self) -> usize {
+        self.dim
+    }
+
+    /// Distance metric used by this index.
+    #[getter]
+    pub fn metric(&self) -> Distance {
+        self.metric.clone()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "AnnIndex(dim={}, metric={}, size={})",
+            self.dim,
+            self.metric.name(),
+            self.size()
+        )
+    }
+
+    /// Start collecting query metrics; optionally serve them in Prometheus
+    /// format at `http://127.0.0.1:<port>/metrics`.
+    #[pyo3(signature = (port = None))]
+    pub fn enable_metrics(&mut self, port: Option<u16>) -> PyResult<()> {
+        let metrics = Arc::new(MetricsCollector::new());
+        metrics.set_index_metadata(self.size(), self.dim, &self.metric.name());
+        if let Some(p) = port {
+            let server = crate::monitoring::MetricsServer::new(Arc::clone(&metrics), p);
+            server.start().map_err(|e| {
+                pyo3::exceptions::PyRuntimeError::new_err(format!(
+                    "Failed to start metrics server: {}",
+                    e
+                ))
+            })?;
         }
-
-        let candidates: Vec<(i64, f32)> = self.entries
-            .par_iter()
-            .enumerate()
-            .filter_map(|(idx, entry_opt)| {
-                // skip deleted entries
-                 let (id, vec, sq_norm) = entry_opt.as_ref()?;
-                // apply user-provided filter
-                if let Some(f) = filter {
-                    if !f.accepts(*id, idx) {
-                        return None;
-                    }
-                }
-                // compute the distance
-                let dist = match self.metric {
-                    Distance::Euclidean()   => crate::metrics::euclidean_sq(q, vec, q_sq, *sq_norm),
-                    Distance::Cosine()      => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
-                    Distance::Manhattan()   => crate::metrics::manhattan(q, vec),
-                    Distance::Chebyshev()   => crate::metrics::chebyshev(q, vec),
-                    Distance::Minkowski(p)  => crate::metrics::minkowski(q, vec, p),
-                    Distance::Hamming()     => crate::metrics::hamming(q, vec),
-                    Distance::Jaccard()     => crate::metrics::jaccard(q, vec),
-                    Distance::Angular()     => crate::metrics::angular_distance(q, vec, q_sq, *sq_norm),
-                    Distance::Canberra()    => crate::metrics::canberra(q, vec),
-                    Distance::Custom(_) => return None, // or error out
-                };
-                Some((*id, dist))
-            })
-            .collect();
-        
-        if candidates.is_empty() {
-            return Ok((vec![], vec![]));
-        }
-
-        // Use a min-heap to select top k efficiently
-        use std::cmp::Ordering;
-        
-        let k = k.min(candidates.len());
-        if k == 0 {
-            return Ok((vec![], vec![]));
-        }
-        
-        let mut candidates = candidates;
-        let (left, mid, _) = candidates.select_nth_unstable_by(k - 1, |a, b| {
-            safe_partial_cmp(&a.1, &b.1)
-        });
-
-        // Collect and sort only the top-k candidates
-        let mut top_k = left.to_vec();
-        top_k.push(*mid);
-        top_k.sort_unstable_by(|a, b| {
-            a.1.partial_cmp(&b.1).unwrap_or_else(|| {
-                if a.1.is_nan() && b.1.is_nan() {
-                    Ordering::Equal
-                } else if a.1.is_nan() {
-                    Ordering::Greater
-                } else if b.1.is_nan() {
-                    Ordering::Less
-                } else {
-                    Ordering::Equal
-                }
-            })
-        });
-
-    // Extract results
-    let ids: Vec<i64> = top_k.iter().map(|(id, _)| *id).collect();
-    let dists: Vec<f32> = top_k.iter().map(|(_, dist)| *dist).collect();
-    Ok((ids, dists))
+        self.metrics = Some(metrics);
+        Ok(())
     }
 
-    /// Secure path validation using canonicalization and allowlist
-    /// 
-    /// Replaces the vulnerable simple string check with robust path validation
-    /// that prevents directory traversal attacks through multiple bypass techniques.
-    fn validate_path(path: &str) -> PyResult<()> {
-        // Use the secure path validation module
-        validate_path_secure(path).map(|_| ())
+    /// Snapshot of collected metrics as a dict, or `None` if not enabled.
+    pub fn get_metrics(&self, py: Python<'_>) -> PyResult<Option<PyObject>> {
+        let Some(metrics) = &self.metrics else {
+            return Ok(None);
+        };
+        let snap = metrics.get_metrics_snapshot();
+        let d = pyo3::types::PyDict::new(py);
+        d.set_item("query_count", snap.query_count)?;
+        d.set_item("avg_query_latency_us", snap.avg_query_latency_us)?;
+        d.set_item("index_size", snap.index_size)?;
+        d.set_item("dimensions", snap.dimensions)?;
+        d.set_item("uptime_seconds", snap.uptime_seconds)?;
+        d.set_item("distance_metric", snap.distance_metric)?;
+        d.set_item("recall_estimates", snap.recall_estimates)?;
+        Ok(Some(d.into_any().unbind()))
     }
-}
 
-impl AnnBackend for AnnIndex {
-    fn new(dim: usize, metric: Distance) -> Self {
-        AnnIndex {
-            dim,
-            metric,
-            minkowski_p: None,
-            entries: Vec::new(),
-            deleted_count: 0,
-            max_deleted_ratio: 0.2,
-            metrics: None,
-            boolean_filters: Mutex::new(HashMap::new()),
-            version: Arc::new(AtomicU64::new(0)),
-            metadata_schema: None,
-            metadata_columns: None,
+    /// Record an externally measured recall@k value.
+    pub fn update_recall_estimate(&self, k: usize, recall: f64) {
+        if let Some(metrics) = &self.metrics {
+            metrics.update_recall_estimate(k, recall);
         }
     }
-    
-    fn add_item(&mut self, item: Vec<f32>) {
-        let id = self.entries.len() as i64;
-        let sq = item.iter().map(|x| x * x).sum::<f32>();
-        self.entries.push(Some((id, item, sq)));
-    }
-    
-    fn build(&mut self) {}
-    
-    fn search(&self, vector: &[f32], k: usize) -> Vec<usize> { 
-        // Simple search implementation without inner_search
-        let mut results: Vec<(usize, f32)> = self.entries
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, entry_opt)| {
-                if let Some((_id, vec, _norm)) = entry_opt {
-                    // Simple Euclidean distance
-                    let dist = vector.iter().zip(vec.iter())
-                        .map(|(a, b)| (a - b) * (a - b))
-                        .sum::<f32>()
-                        .sqrt();
-                    Some((idx, dist))
-                } else {
-                    None
-                }
-            })
-            .collect();
-            
-        results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-        results.iter().take(k).map(|(idx, _)| *idx).collect()
-    }
-    
-    fn save(&self, path: &str) { 
-        let _ = save_index(self, path); 
-    }
-    
 
-    fn load(path: &str) -> Self { 
-        load_index(path).unwrap() 
+    /// Summary of the index configuration and memory use.
+    pub fn get_info(&self) -> HashMap<String, String> {
+        self.info()
     }
-}
 
-
-fn safe_partial_cmp(a: &f32, b: &f32) -> std::cmp::Ordering {
-    a.partial_cmp(b).unwrap_or_else(|| {
-        if a.is_nan() && b.is_nan() {
-            std::cmp::Ordering::Equal
-        } else if a.is_nan() {
-            std::cmp::Ordering::Greater
-        } else if b.is_nan() {
-            std::cmp::Ordering::Less
-        } else {
-            std::cmp::Ordering::Equal
-        }
-    })
+    /// Check internal consistency; raises `ValueError` describing any issues.
+    pub fn validate(&self) -> PyResult<()> {
+        self.validate_integrity()
+    }
 }

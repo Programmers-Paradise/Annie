@@ -81,7 +81,12 @@ impl GpuBuffer {
     pub fn return_to_pool(&mut self) {
         if !self.returned {
             if let Ok(mut pool) = self.pool.lock() {
-                pool.return_buffer(self.device_id, std::mem::take(&mut self.buffer), self.size, self.precision);
+                pool.return_buffer(
+                    self.device_id,
+                    std::mem::take(&mut self.buffer),
+                    self.size,
+                    self.precision,
+                );
                 self.returned = true;
             }
         }
@@ -166,7 +171,7 @@ impl DeviceMemoryPool {
             allocated: 0,
             peak_usage: 0,
             max_pool_size: 1024 * 1024 * 1024, // 1GB default max pool size
-            fragmentation_threshold: 0.5, // Cleanup when 50% fragmented
+            fragmentation_threshold: 0.5,      // Cleanup when 50% fragmented
             stats: MemoryStats::default(),
         }
     }
@@ -180,21 +185,21 @@ impl DeviceMemoryPool {
                 return buf;
             }
         }
-        
+
         self.stats.cache_misses += 1;
-        
+
         let elem_size = match precision {
             Precision::Fp32 => 4,
             Precision::Fp16 => 2,
             Precision::Int8 => 1,
         };
         let bytes = size * elem_size;
-        
+
         // Check memory pressure before allocation
         if self.allocated + bytes > self.max_pool_size {
             self.cleanup_fragmented_buffers();
         }
-        
+
         self.record_allocation(bytes);
         vec![0u8; bytes]
     }
@@ -202,12 +207,15 @@ impl DeviceMemoryPool {
     fn return_buffer(&mut self, buffer: Vec<u8>, size: usize, precision: Precision) {
         let key = (size, precision);
         let buffer_size = buffer.len();
-        
+
         // Check if we should keep this buffer or drop it due to memory pressure
         if self.allocated < self.max_pool_size {
-            self.buffers.entry(key).or_insert_with(Vec::new).push(buffer);
+            self.buffers
+                .entry(key)
+                .or_insert_with(Vec::new)
+                .push(buffer);
         }
-        
+
         self.record_deallocation(buffer_size);
     }
 
@@ -239,14 +247,15 @@ impl DeviceMemoryPool {
 
         if fragmentation_ratio > self.fragmentation_threshold {
             // Remove buffer types with only a few buffers
-            self.buffers.retain(|_, buffers| buffers.len() > avg_buffers_per_type / 2);
-            
+            self.buffers
+                .retain(|_, buffers| buffers.len() > avg_buffers_per_type / 2);
+
             // Limit number of buffers per type
             for buffers in self.buffers.values_mut() {
                 buffers.truncate(avg_buffers_per_type * 2);
             }
         }
-        
+
         self.stats.last_cleanup = Some(Instant::now());
     }
 
@@ -308,16 +317,30 @@ impl GpuMemoryPool {
     pub fn get_buffer(&self, device_id: usize, size: usize, precision: Precision) -> Vec<u8> {
         let pool = {
             let mut pools = self.0.lock().unwrap();
-            pools.entry(device_id).or_insert_with(|| Arc::new(Mutex::new(DeviceMemoryPool::new()))).clone()
+            pools
+                .entry(device_id)
+                .or_insert_with(|| Arc::new(Mutex::new(DeviceMemoryPool::new())))
+                .clone()
         };
         let mut pool = pool.lock().unwrap();
         pool.get_buffer(size, precision)
     }
 
     /// Get a RAII-wrapped buffer that automatically returns to pool on drop
-    pub fn get_managed_buffer(&self, device_id: usize, size: usize, precision: Precision) -> GpuBuffer {
+    pub fn get_managed_buffer(
+        &self,
+        device_id: usize,
+        size: usize,
+        precision: Precision,
+    ) -> GpuBuffer {
         let buffer = self.get_buffer(device_id, size, precision);
-        GpuBuffer::new(buffer, device_id, size, precision, Arc::new(Mutex::new(self.clone())))
+        GpuBuffer::new(
+            buffer,
+            device_id,
+            size,
+            precision,
+            Arc::new(Mutex::new(self.clone())),
+        )
     }
 
     /// Create a batch of managed buffers
@@ -325,7 +348,13 @@ impl GpuMemoryPool {
         GpuBufferBatch::new(device_id, Arc::new(Mutex::new(self.clone())))
     }
 
-    pub fn return_buffer(&self, device_id: usize, buffer: Vec<u8>, size: usize, precision: Precision) {
+    pub fn return_buffer(
+        &self,
+        device_id: usize,
+        buffer: Vec<u8>,
+        size: usize,
+        precision: Precision,
+    ) {
         if let Some(pool) = {
             let pools = self.0.lock().unwrap();
             pools.get(&device_id).cloned()
@@ -358,7 +387,10 @@ impl GpuMemoryPool {
     pub fn set_max_pool_size(&self, device_id: usize, max_size: usize) {
         let pool = {
             let mut pools = self.0.lock().unwrap();
-            pools.entry(device_id).or_insert_with(|| Arc::new(Mutex::new(DeviceMemoryPool::new()))).clone()
+            pools
+                .entry(device_id)
+                .or_insert_with(|| Arc::new(Mutex::new(DeviceMemoryPool::new())))
+                .clone()
         };
         let mut pool = pool.lock().unwrap();
         pool.set_max_pool_size(max_size);
@@ -389,13 +421,13 @@ impl GpuMemoryPool {
         let pools = self.0.lock().unwrap();
         let mut total_allocated = 0;
         let mut total_peak = 0;
-        
+
         for pool in pools.values() {
             let pool = pool.lock().unwrap();
             total_allocated += pool.allocated;
             total_peak += pool.peak_usage;
         }
-        
+
         (total_allocated, total_peak)
     }
 
@@ -434,12 +466,12 @@ impl GpuMemoryPool {
     pub fn summary_stats(&self) -> HashMap<usize, MemoryStats> {
         let pools = self.0.lock().unwrap();
         let mut summary = HashMap::new();
-        
+
         for (&device_id, pool) in pools.iter() {
             let pool = pool.lock().unwrap();
             summary.insert(device_id, pool.get_stats());
         }
-        
+
         summary
     }
 }

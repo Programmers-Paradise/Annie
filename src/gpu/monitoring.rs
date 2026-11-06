@@ -1,7 +1,10 @@
 use crate::gpu::memory::{GpuMemoryPool, MemoryStats};
-use std::time::{Duration, Instant};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use std::thread;
-use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
+use std::time::{Duration, Instant};
 
 /// Memory usage monitoring and reporting utility
 pub struct MemoryMonitor {
@@ -55,7 +58,7 @@ impl MemoryMonitor {
 
         thread::spawn(move || {
             let mut last_cleanup = Instant::now();
-            
+
             while running.load(Ordering::SeqCst) {
                 thread::sleep(report_interval);
 
@@ -88,7 +91,7 @@ impl MemoryMonitor {
     pub fn generate_report(pool: &GpuMemoryPool, pressure_threshold: f32) -> MemoryReport {
         let (total_allocated, total_peak) = pool.total_memory_usage();
         let summary = pool.summary_stats();
-        
+
         let mut device_stats = Vec::new();
         let mut total_efficiency = 0.0;
         let mut efficiency_count = 0;
@@ -96,7 +99,7 @@ impl MemoryMonitor {
 
         for (device_id, stats) in summary {
             device_stats.push((device_id, stats));
-            
+
             if let Some(efficiency) = pool.cache_efficiency(device_id) {
                 total_efficiency += efficiency;
                 efficiency_count += 1;
@@ -128,25 +131,37 @@ impl MemoryMonitor {
     /// Log memory report
     fn log_report(report: &MemoryReport) {
         println!("=== GPU Memory Report ===");
-        println!("Total Allocated: {} bytes ({:.2} MB)", 
-                 report.total_allocated, 
-                 report.total_allocated as f64 / (1024.0 * 1024.0));
-        println!("Total Peak: {} bytes ({:.2} MB)", 
-                 report.total_peak, 
-                 report.total_peak as f64 / (1024.0 * 1024.0));
-        println!("Average Cache Efficiency: {:.1}%", 
-                 report.average_cache_efficiency * 100.0);
+        println!(
+            "Total Allocated: {} bytes ({:.2} MB)",
+            report.total_allocated,
+            report.total_allocated as f64 / (1024.0 * 1024.0)
+        );
+        println!(
+            "Total Peak: {} bytes ({:.2} MB)",
+            report.total_peak,
+            report.total_peak as f64 / (1024.0 * 1024.0)
+        );
+        println!(
+            "Average Cache Efficiency: {:.1}%",
+            report.average_cache_efficiency * 100.0
+        );
 
         if !report.memory_pressure_alerts.is_empty() {
-            println!("⚠️  Memory Pressure Alerts: {:?}", report.memory_pressure_alerts);
+            println!(
+                "⚠️  Memory Pressure Alerts: {:?}",
+                report.memory_pressure_alerts
+            );
         }
 
         for (device_id, stats) in &report.device_stats {
-            println!("Device {}: {} allocs, {} deallocs, {:.1}% cache efficiency",
-                     device_id,
-                     stats.allocation_count,
-                     stats.deallocation_count,
-                     (stats.cache_hits as f64 / (stats.cache_hits + stats.cache_misses).max(1) as f64) * 100.0);
+            println!(
+                "Device {}: {} allocs, {} deallocs, {:.1}% cache efficiency",
+                device_id,
+                stats.allocation_count,
+                stats.deallocation_count,
+                (stats.cache_hits as f64 / (stats.cache_hits + stats.cache_misses).max(1) as f64)
+                    * 100.0
+            );
         }
         println!("========================");
     }
@@ -155,9 +170,12 @@ impl MemoryMonitor {
     fn handle_pressure_alerts(pool: &GpuMemoryPool, alert_devices: &[usize]) {
         for &device_id in alert_devices {
             if let Some(pressure) = pool.memory_pressure(device_id) {
-                println!("🚨 High memory pressure on device {}: {:.1}%", 
-                         device_id, pressure * 100.0);
-                
+                println!(
+                    "🚨 High memory pressure on device {}: {:.1}%",
+                    device_id,
+                    pressure * 100.0
+                );
+
                 if pressure > 0.9 {
                     println!("   Performing emergency cleanup...");
                     pool.emergency_cleanup(device_id);
@@ -168,9 +186,10 @@ impl MemoryMonitor {
 
     /// Get current memory status
     pub fn get_current_report(&self) -> Option<MemoryReport> {
-        self.pool.lock().ok().map(|pool| {
-            Self::generate_report(&*pool, self.memory_pressure_threshold)
-        })
+        self.pool
+            .lock()
+            .ok()
+            .map(|pool| Self::generate_report(&*pool, self.memory_pressure_threshold))
     }
 }
 
@@ -198,14 +217,14 @@ mod tests {
     #[test]
     fn test_memory_monitor_report_generation() {
         let pool = GpuMemoryPool::new();
-        
+
         // Create some memory usage
         let _buffer1 = pool.get_managed_buffer(0, 256, Precision::Fp32);
         let _buffer2 = pool.get_managed_buffer(1, 512, Precision::Fp16);
-        
+
         // Generate report
         let report = MemoryMonitor::generate_report(&pool, 0.8);
-        
+
         assert!(report.total_allocated > 0);
         assert!(report.device_stats.len() >= 2);
         assert!(report.average_cache_efficiency >= 0.0);
@@ -215,12 +234,8 @@ mod tests {
     #[test]
     fn test_memory_monitor_creation() {
         let pool = Arc::new(Mutex::new(GpuMemoryPool::new()));
-        let monitor = MemoryMonitor::new(
-            pool,
-            Duration::from_secs(1),
-            Duration::from_secs(60),
-        );
-        
+        let monitor = MemoryMonitor::new(pool, Duration::from_secs(1), Duration::from_secs(60));
+
         // Test that we can get a report
         let report = monitor.get_current_report();
         assert!(report.is_some());

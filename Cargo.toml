@@ -1,15 +1,22 @@
 [package]
 name = "rust_annie"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2021"
+rust-version = "1.74"
+description = "Fast exact and approximate nearest-neighbour search for Python, implemented in Rust"
+authors = ["Arnav Kapoor", "Abhinav Shukla"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Programmers-Paradise/Annie"
+keywords = ["nearest-neighbor", "knn", "hnsw", "vector-search", "python"]
+categories = ["algorithms", "science"]
+exclude = ["benchmarks/", "paper/", "docs/", "scripts/", ".github/"]
 
 [lib]
 name = "rust_annie"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-
-rust_annie_macros = { path = "rust_annie_macros/foo" }
 pyo3 = { version = "0.25.0" }
 hnsw_rs = "0.3.4"
 numpy = "0.25.0"
@@ -19,8 +26,6 @@ bincode = "1.3.3"
 rayon = "1.12.0"
 lazy_static = { version = "1.4.0", optional = true }
 bit-vec = { version = "0.10.0", features = ["serde"] }
-rand = "0.10.1"
-criterion = { version = "0.8.2", optional = true }
 
 # GPU backends
 cust = { version = "0.3.0", optional = true }
@@ -36,17 +41,16 @@ rocm = ["hip-rs", "lazy_static"]
 # Forwarding features to control PyO3 from this crate
 # Use these in CI/maturin instead of trying to enable dependency features directly.
 python-ext = ["pyo3/extension-module"]
-python-abi3 = ["pyo3/abi3-py38"]
+python-abi3 = ["pyo3/abi3-py39"]
 # On Windows, generate an import library for python3.dll when needed
 pyo3-import-lib = ["pyo3/generate-import-lib"]
 
 [workspace]
-members = [".", "fuzz", "rust_annie_macros/foo"]
+members = [".", "fuzz"]
 
 [dev-dependencies]
 criterion = "0.8"
-rand = "0.10"
 
 [[bench]]
-name = "gpu_benchmark"
+name = "ann_bench"
 harness = false
