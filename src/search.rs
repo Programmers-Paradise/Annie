@@ -13,6 +13,81 @@ use crate::metrics::{self, Distance};
 /// ID used to pad batch results when fewer than `k` neighbours exist.
 pub const PAD_ID: i64 = -1;
 
+/// Number of independent accumulators in the distance kernels. Splitting the
+/// sum lets the compiler keep several SIMD lanes busy (floating-point addition
+/// is not associative, so it will not reorder a single running sum itself).
+const LANES: usize = 8;
+
+/// Squared Euclidean distance.
+#[inline]
+pub fn l2_sq(a: &[f32], b: &[f32]) -> f32 {
+    let mut acc = [0.0f32; LANES];
+    let (ca, cb) = (a.chunks_exact(LANES), b.chunks_exact(LANES));
+    let (ra, rb) = (ca.remainder(), cb.remainder());
+    for (x, y) in ca.zip(cb) {
+        for i in 0..LANES {
+            let d = x[i] - y[i];
+            acc[i] += d * d;
+        }
+    }
+    let mut tail = 0.0;
+    for (x, y) in ra.iter().zip(rb) {
+        let d = x - y;
+        tail += d * d;
+    }
+    acc.iter().sum::<f32>() + tail
+}
+
+/// Dot product.
+#[inline]
+pub fn dot(a: &[f32], b: &[f32]) -> f32 {
+    let mut acc = [0.0f32; LANES];
+    let (ca, cb) = (a.chunks_exact(LANES), b.chunks_exact(LANES));
+    let (ra, rb) = (ca.remainder(), cb.remainder());
+    for (x, y) in ca.zip(cb) {
+        for i in 0..LANES {
+            acc[i] += x[i] * y[i];
+        }
+    }
+    let tail: f32 = ra.iter().zip(rb).map(|(x, y)| x * y).sum();
+    acc.iter().sum::<f32>() + tail
+}
+
+/// Manhattan (L1) distance.
+#[inline]
+pub fn l1(a: &[f32], b: &[f32]) -> f32 {
+    let mut acc = [0.0f32; LANES];
+    let (ca, cb) = (a.chunks_exact(LANES), b.chunks_exact(LANES));
+    let (ra, rb) = (ca.remainder(), cb.remainder());
+    for (x, y) in ca.zip(cb) {
+        for i in 0..LANES {
+            acc[i] += (x[i] - y[i]).abs();
+        }
+    }
+    let tail: f32 = ra.iter().zip(rb).map(|(x, y)| (x - y).abs()).sum();
+    acc.iter().sum::<f32>() + tail
+}
+
+/// Ranking score for a built-in metric: monotone in the true distance, and
+/// cheaper to compute (Euclidean is ranked by its square). Convert the final
+/// results with [`score_to_distance`].
+#[inline]
+pub fn builtin_score(metric: &Distance, q: &[f32], q_norm: f32, v: &[f32], v_norm: f32) -> f32 {
+    match metric {
+        Distance::Euclidean() => l2_sq(q, v),
+        _ => builtin_distance(metric, q, q_norm, v, v_norm),
+    }
+}
+
+/// Convert a [`builtin_score`] into the distance reported to users.
+#[inline]
+pub fn score_to_distance(metric: &Distance, score: f32) -> f32 {
+    match metric {
+        Distance::Euclidean() => score.max(0.0).sqrt(),
+        _ => score,
+    }
+}
+
 /// Distance between `q` and `v` for a built-in metric.
 ///
 /// `q_norm` / `v_norm` are the (non-squared) L2 norms, precomputed so that
@@ -20,24 +95,15 @@ pub const PAD_ID: i64 = -1;
 #[inline]
 pub fn builtin_distance(metric: &Distance, q: &[f32], q_norm: f32, v: &[f32], v_norm: f32) -> f32 {
     match metric {
-        Distance::Euclidean() => q
-            .iter()
-            .zip(v)
-            .map(|(a, b)| {
-                let d = a - b;
-                d * d
-            })
-            .sum::<f32>()
-            .sqrt(),
+        Distance::Euclidean() => l2_sq(q, v).sqrt(),
         Distance::Cosine() => {
             if q_norm == 0.0 || v_norm == 0.0 {
                 1.0
             } else {
-                let dot = metrics::dot_product(q, v);
-                (1.0 - dot / (q_norm * v_norm)).clamp(0.0, 2.0)
+                (1.0 - dot(q, v) / (q_norm * v_norm)).clamp(0.0, 2.0)
             }
         }
-        Distance::Manhattan() => metrics::manhattan(q, v),
+        Distance::Manhattan() => l1(q, v),
         Distance::Chebyshev() => metrics::chebyshev(q, v),
         Distance::Minkowski(p) => metrics::minkowski(q, v, *p),
         Distance::Hamming() => metrics::hamming(q, v),
@@ -48,6 +114,59 @@ pub fn builtin_distance(metric: &Distance, q: &[f32], q_norm: f32, v: &[f32], v_
     }
 }
 
+/// Running top-k buffer: accepts candidates in any order, keeps memory at
+/// O(k) by periodically discarding everything beyond the k best.
+pub struct TopK {
+    k: usize,
+    buf: Vec<(i64, f32)>,
+    /// Score of the k-th best candidate after the last shrink; candidates
+    /// scoring worse can be skipped (NaN never beats it, ties are kept).
+    bound: f32,
+}
+
+impl TopK {
+    pub fn new(k: usize) -> Self {
+        TopK {
+            k,
+            buf: Vec::with_capacity(2 * k.max(32)),
+            bound: f32::INFINITY,
+        }
+    }
+
+    #[inline]
+    pub fn push(&mut self, id: i64, score: f32) {
+        if score > self.bound {
+            return;
+        }
+        self.buf.push((id, score));
+        if self.buf.len() >= 2 * self.k.max(32) {
+            self.shrink();
+        }
+    }
+
+    fn shrink(&mut self) {
+        if self.buf.len() > self.k {
+            self.buf.select_nth_unstable_by(self.k - 1, cmp_candidates);
+            self.buf.truncate(self.k);
+            let kth = self.buf[self.k - 1].1;
+            if !kth.is_nan() {
+                self.bound = kth;
+            }
+        }
+    }
+
+    pub fn merge(mut self, other: TopK) -> TopK {
+        for (id, s) in other.buf {
+            self.push(id, s);
+        }
+        self
+    }
+
+    pub fn into_sorted(self) -> (Vec<i64>, Vec<f32>) {
+        top_k(self.buf, self.k)
+    }
+}
+
 #[inline]
 pub fn l2_norm(v: &[f32]) -> f32 {
     v.iter().map(|x| x * x).sum::<f32>().sqrt()
@@ -55,7 +174,7 @@ pub fn l2_norm(v: &[f32]) -> f32 {
 
 /// Order by distance (NaN last), breaking ties by ID for deterministic output.
 #[inline]
-fn cmp_candidates(a: &(i64, f32), b: &(i64, f32)) -> Ordering {
+pub(crate) fn cmp_candidates(a: &(i64, f32), b: &(i64, f32)) -> Ordering {
     match (a.1.is_nan(), b.1.is_nan()) {
         (true, true) => a.0.cmp(&b.0),
         (true, false) => Ordering::Greater,
