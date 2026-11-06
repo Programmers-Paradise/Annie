@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2026-11-06
 
 This release fixes many correctness problems and makes the documented API match the
 implementation. It contains breaking changes; see "Migrating from 0.2" below.
@@ -38,6 +38,9 @@ implementation. It contains breaking changes; see "Migrating from 0.2" below.
   `False`) and were unhashable.
 - Duplicate IDs within one `add` call were not detected; NaN/infinite values were accepted.
 - `update_recall_estimate` and `enable_metrics` recorded nothing.
+- `PyHnswIndex` searches with selective filters could miss matching vectors (graph
+  traversal stopped before reaching them); such searches now fall back to an exact scan
+  of the matching vectors.
 
 ### Added
 - `AnnIndex.remove`, `update` and `compact` (previously raised `NotImplementedError`),
@@ -65,7 +68,10 @@ implementation. It contains breaking changes; see "Migrating from 0.2" below.
   acquires its lock without holding the GIL (prevents deadlocks).
 - HNSW defaults: `m=16`, `ef_construction=200`, `ef_search=50`.
 - Maximum dimensionality raised from 4 096 to 65 536; the 1 000 000-vector limit was removed.
-- Minimum Python version is 3.9.
+- Minimum Python version is 3.9; building from source needs Rust 1.85 or newer.
+- Exact search is several times faster: vectors are stored contiguously, distance
+  kernels are vectorised, the top-k buffer is bounded, and small searches avoid
+  thread-pool overhead.
 
 ### Removed
 - Metadata schema methods (`py_set_metadata_schema`, `py_add_with_metadata`,

@@ -29,7 +29,7 @@ pip install rust-annie
 
 Pre-built wheels are available for Linux (x86-64, aarch64, musl), macOS (Intel and Apple
 silicon) and Windows (x86-64) for Python ≥ 3.9. NumPy is the only runtime dependency.
-To build from source you need a Rust toolchain (≥ 1.74):
+To build from source you need a Rust toolchain (≥ 1.85):
 
 ```bash
 git clone https://github.com/Programmers-Paradise/Annie.git
@@ -74,9 +74,11 @@ from rust_annie import AnnIndex, register_metric
 
 cov_inv = np.linalg.inv(np.array([[2.0, 0.3], [0.3, 0.5]]))
 
+
 def mahalanobis(a, b):
     d = a - b
     return float(np.sqrt(d @ cov_inv @ d))
+
 
 register_metric("mahalanobis", mahalanobis)
 index = AnnIndex.new_with_metric(2, "mahalanobis")
@@ -115,12 +117,15 @@ assert len(restored) == 97
 
 ## Performance
 
-Exact search is computed in Rust, in parallel across cores, without holding the GIL.
-HNSW graph construction and traversal use the
-[`hnsw_rs`](https://crates.io/crates/hnsw_rs) crate. See
-[docs/benchmarks.md](https://github.com/Programmers-Paradise/Annie/blob/main/docs/benchmarks.md) for recall/throughput comparisons with
-hnswlib and FAISS on standard ann-benchmarks datasets, and instructions to reproduce them
-with [`benchmarks/compare.py`](https://github.com/Programmers-Paradise/Annie/blob/main/benchmarks/compare.py).
+Exact search runs in Rust over contiguous memory with vectorised distance kernels,
+in parallel across cores and without holding the GIL. In our measurements it matches
+FAISS's flat index and is 2–9× faster than NumPy. `PyHnswIndex` builds on the
+[`hnsw_rs`](https://crates.io/crates/hnsw_rs) crate; it reaches the same recall as
+hnswlib and FAISS but is 3–7× slower per query, so prefer those libraries when raw HNSW
+throughput is what matters. See
+[docs/benchmarks.md](https://github.com/Programmers-Paradise/Annie/blob/main/docs/benchmarks.md)
+for the numbers and how to reproduce them with
+[`benchmarks/compare.py`](https://github.com/Programmers-Paradise/Annie/blob/main/benchmarks/compare.py).
 
 ## Contributing
 

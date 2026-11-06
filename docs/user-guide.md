@@ -40,8 +40,8 @@ from rust_annie import AnnIndex, Distance
 
 AnnIndex(16, Distance.MANHATTAN)
 AnnIndex(16, Distance.Minkowski(3.0))
-AnnIndex.new_minkowski(16, 3.0)        # equivalent
-AnnIndex.new_with_metric(16, "cosine") # by name
+AnnIndex.new_minkowski(16, 3.0)  # equivalent
+AnnIndex.new_with_metric(16, "cosine")  # by name
 ```
 
 ### Custom metrics
@@ -54,8 +54,10 @@ propagate to the caller of `search`.
 import numpy as np
 from rust_annie import AnnIndex, Distance, register_metric, list_metrics
 
+
 def weighted_l1(a, b, w=np.array([1.0, 10.0])):
     return float(np.sum(w * np.abs(a - b)))
+
 
 register_metric("weighted_l1", weighted_l1)
 assert "weighted_l1" in list_metrics()
@@ -85,10 +87,12 @@ from rust_annie import AnnIndex, Filter
 index = AnnIndex(1)
 index.add(np.arange(10.0)[:, None], np.arange(10))
 
+
 def ids_for(flt):
     return index.search([0.0], k=10, filter=flt)[0].tolist()
 
-assert ids_for(Filter.id_range(3, 5)) == [3, 4, 5]          # inclusive
+
+assert ids_for(Filter.id_range(3, 5)) == [3, 4, 5]  # inclusive
 assert ids_for(Filter.id_set([8, 1])) == [1, 8]
 assert ids_for(Filter.and_([Filter.id_range(0, 4), Filter.not_(Filter.id_set([2]))])) == [0, 1, 3, 4]
 assert ids_for(Filter.or_([Filter.id_set([9]), Filter.id_range(0, 1)])) == [0, 1, 9]
@@ -102,9 +106,10 @@ filters unless you manage positions yourself.
 Callables are evaluated once per stored vector before the search starts. For repeated
 queries with the same predicate, build a `Filter.id_set` once instead.
 
-With `PyHnswIndex`, filtering happens during graph traversal. Very selective filters
-(matching a tiny fraction of the data) can lower recall; increase `ef` or use exact
-search on the filtered subset.
+With `PyHnswIndex`, filtering happens during graph traversal. When a filter matches only
+a small part of the index (fewer than about `2 · m · ef` vectors, or under 10 % of them),
+or traversal finds fewer than `k` matches, the search instead scans the matching vectors
+exactly, so selective filters do not lose results.
 
 ## Adding, removing and updating
 
@@ -114,8 +119,8 @@ from rust_annie import AnnIndex
 
 index = AnnIndex(4)
 index.add(np.random.rand(1000, 4), np.arange(1000))
-index.remove([10, 11])        # KeyError (and no change) if any ID is missing
-index.update(12, np.zeros(4)) # replace a vector in place
+index.remove([10, 11])  # KeyError (and no change) if any ID is missing
+index.update(12, np.zeros(4))  # replace a vector in place
 assert 10 not in index and len(index) == 998
 ```
 

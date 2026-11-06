@@ -2,8 +2,14 @@
 
 `benchmarks/compare.py` compares rust-annie with other k-NN libraries using the
 [ANN-Benchmarks](https://ann-benchmarks.com) methodology: standard datasets with
-precomputed ground truth, recall@k, and queries issued one at a time on a single thread.
-It also reports batch throughput using all cores, and index build time.
+precomputed ground truth, recall@k, and queries issued one at a time. It also reports
+batch throughput using all cores, and index build time.
+
+In the one-query-at-a-time column, FAISS and hnswlib are limited to one thread. rust-annie
+HNSW search is single-threaded per query, but rust-annie exact search parallelises a
+single query across cores once the index holds more than about 500 000 numbers
+(e.g. 8 000 vectors of dimension 64); set `RAYON_NUM_THREADS=1` for a strictly
+single-threaded comparison.
 
 Libraries compared (each is skipped if not installed):
 
@@ -38,21 +44,44 @@ For Rust-level micro-benchmarks run `cargo bench`.
 
 ## Results
 
-Results depend strongly on hardware; always report the machine.
+Results depend strongly on hardware; always report the machine. The tables below were
+measured with rust-annie 0.3.0, hnswlib 0.8.0, FAISS 1.15.1 (CPU) and NumPy 2 on an
+Intel Core i5-1135G7 laptop (4 cores, 8 threads), Linux, Python 3.14, using
+synthetic Gaussian data (Euclidean, k = 10, 200 queries; `M=16`, `efC=200`). QPS is
+queries per second.
 
-`random-xs` (10 000 × 32 Gaussian vectors, Euclidean, 200 queries, k = 10), rust-annie
-0.3.0, Linux x86-64, 8 CPUs. hnswlib and FAISS were not installed for this run.
+`random-xs`: 10 000 × 32
 
-| Library | Method | Parameters | Recall@10 | QPS (1 thread) | QPS (batch) | Build (s) |
+| Library | Method | ef | Recall@10 | QPS (one at a time) | QPS (batch) | Build (s) |
 |---|---|---|---|---|---|---|
-| rust-annie | exact | – | 1.000 | 2 123 | 6 781 | 0.00 |
-| rust-annie | HNSW | M=16, efC=200, ef=20 | 0.831 | 4 341 | 26 479 | 2.19 |
-| rust-annie | HNSW | M=16, efC=200, ef=80 | 0.984 | 1 553 | 8 575 | 2.19 |
-| rust-annie | HNSW | M=16, efC=200, ef=320 | 1.000 | 507 | 2 838 | 2.19 |
-| NumPy | exact (BLAS) | – | 1.000 | 5 470 | 5 527 | – |
+| rust-annie | exact | – | 1.000 | 12 320 | 54 428 | 0.00 |
+| FAISS | exact (`IndexFlatL2`) | – | 1.000 | 12 265 | 64 398 | 0.00 |
+| NumPy | exact (BLAS) | – | 1.000 | 6 722 | 7 892 | – |
+| rust-annie | HNSW | 80 | 0.985 | 2 930 | 16 745 | 1.08 |
+| hnswlib | HNSW | 80 | 0.980 | 21 495 | 106 155 | 0.25 |
+| FAISS | HNSW | 80 | 0.984 | 15 606 | 127 325 | 0.47 |
 
-At this small size, single exact queries are faster with NumPy's BLAS matrix–vector
-product than with rust-annie's exact search, and HNSW only pays off at low `ef`;
-approximate indexes are intended for much larger collections. Results on the standard
-SIFT-1M and GloVe-100 datasets, including hnswlib and FAISS, are generated with the
-commands above.
+`random-s`: 100 000 × 64
+
+| Library | Method | ef | Recall@10 | QPS (one at a time) | QPS (batch) | Build (s) |
+|---|---|---|---|---|---|---|
+| rust-annie | exact | – | 1.000 | 1 305 | 1 803 | 0.02 |
+| FAISS | exact (`IndexFlatL2`) | – | 1.000 | 727 | 2 760 | 0.00 |
+| NumPy | exact (BLAS) | – | 1.000 | 149 | 160 | – |
+| rust-annie | HNSW | 320 | 0.909 | 306 | 1 415 | 40.1 |
+| hnswlib | HNSW | 320 | 0.913 | 1 748 | 4 808 | 11.1 |
+| FAISS | HNSW | 320 | 0.886 | 1 907 | 6 983 | 9.9 |
+
+What these show:
+
+- **Exact search** in rust-annie is on par with FAISS's flat index (within ±20 % for
+  batches; faster for single queries on the larger set because it uses all cores, see
+  above) and 2–9× faster than a NumPy implementation.
+- **HNSW search** in rust-annie reaches the same recall as hnswlib and FAISS for the
+  same parameters, but is 3–7× slower per query and builds 4× more slowly. If HNSW
+  throughput on Euclidean or inner-product data is what matters most, use hnswlib or
+  FAISS. rust-annie's HNSW suits workloads that need its other features (removal,
+  filters, a shared API with exact search) at moderate query rates.
+- Random Gaussian data in 64 dimensions is a hard case for graph indexes, which is why
+  recall is low at small `ef`; real embedding datasets usually reach high recall at
+  lower `ef`. Run the SIFT-1M and GloVe-100 commands above for standard results.
