@@ -25,7 +25,7 @@ Questions about using the library are welcome as GitHub issues (choose "Question
 
 ## Development setup
 
-You need Python ≥ 3.9 and a Rust toolchain ≥ 1.74 (install via <https://rustup.rs>).
+You need Python ≥ 3.9 and a Rust toolchain ≥ 1.85 (install via <https://rustup.rs>).
 
 ```bash
 git clone https://github.com/Programmers-Paradise/Annie.git

@@ -2,7 +2,7 @@
 name = "rust_annie"
 version = "0.3.0"
 edition = "2021"
-rust-version = "1.74"
+rust-version = "1.85"
 description = "Fast exact and approximate nearest-neighbour search for Python, implemented in Rust"
 authors = ["Arnav Kapoor", "Abhinav Shukla"]
 license = "MIT"
