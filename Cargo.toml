@@ -2,7 +2,7 @@
 name = "rust_annie"
 version = "0.3.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.87"
 description = "Fast exact and approximate nearest-neighbour search for Python, implemented in Rust"
 authors = ["Arnav Kapoor", "Abhinav Shukla"]
 license = "MIT"
@@ -41,7 +41,7 @@ rocm = ["hip-rs", "lazy_static"]
 # Forwarding features to control PyO3 from this crate
 # Use these in CI/maturin instead of trying to enable dependency features directly.
 python-ext = ["pyo3/extension-module"]
-python-abi3 = ["pyo3/abi3-py39"]
+python-abi3 = ["pyo3/abi3-py310"]
 # On Windows, generate an import library for python3.dll when needed
 pyo3-import-lib = ["pyo3/generate-import-lib"]
 

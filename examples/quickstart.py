@@ -18,5 +18,5 @@ approx.add(data, ids)
 
 for ef in (10, 50, 200):
     found, _ = approx.search_batch(queries, k=10, ef=ef)
-    recall = np.mean([len(set(f) & set(t)) / 10 for f, t in zip(found, true_ids)])
+    recall = np.mean([len(set(f) & set(t)) / 10 for f, t in zip(found, true_ids, strict=True)])
     print(f"HNSW ef={ef:<4d} recall@10 = {recall:.3f}")

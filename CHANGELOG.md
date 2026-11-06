@@ -68,7 +68,7 @@ implementation. It contains breaking changes; see "Migrating from 0.2" below.
   acquires its lock without holding the GIL (prevents deadlocks).
 - HNSW defaults: `m=16`, `ef_construction=200`, `ef_search=50`.
 - Maximum dimensionality raised from 4 096 to 65 536; the 1 000 000-vector limit was removed.
-- Minimum Python version is 3.9; building from source needs Rust 1.85 or newer.
+- Minimum Python version is 3.10 (3.9 is end-of-life); building from source needs Rust 1.87 or newer.
 - Exact search is several times faster: vectors are stored contiguously, distance
   kernels are vectorised, the top-k buffer is bounded, and small searches avoid
   thread-pool overhead.

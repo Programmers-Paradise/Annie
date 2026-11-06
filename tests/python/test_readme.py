@@ -13,7 +13,7 @@ BLOCK = re.compile(r"```python\n(.*?)```", re.S)
 
 def blocks():
     for path in DOCS:
-        for i, code in enumerate(BLOCK.findall(path.read_text())):
+        for i, code in enumerate(BLOCK.findall(path.read_text(encoding="utf-8"))):
             if "# doctest: skip" not in code:
                 yield pytest.param(code, id=f"{path.name}-{i}")
 

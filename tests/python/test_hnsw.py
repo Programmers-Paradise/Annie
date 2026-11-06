@@ -22,7 +22,7 @@ def test_returns_user_ids_and_true_distances(clustered):
     got_ids, got_d = idx.search(queries[0], k=10)
     assert set(got_ids.tolist()) <= set(ids.tolist())
     pos = {int(i): n for n, i in enumerate(ids)}
-    for i, d in zip(got_ids, got_d):
+    for i, d in zip(got_ids, got_d, strict=True):
         assert d == pytest.approx(euclidean(queries[0], data[pos[int(i)]]), rel=1e-4)
     assert np.all(np.diff(got_d) >= 0)
 
@@ -48,8 +48,8 @@ def test_higher_ef_does_not_reduce_recall(clustered):
     idx = PyHnswIndex(32, m=8, ef_construction=40)
     idx.add(data, ids)
     truth = [exact_knn(data, ids, q, 10, euclidean)[0] for q in queries]
-    low = np.mean([recall(idx.search(q, k=10, ef=10)[0], t) for q, t in zip(queries, truth)])
-    high = np.mean([recall(idx.search(q, k=10, ef=400)[0], t) for q, t in zip(queries, truth)])
+    low = np.mean([recall(idx.search(q, k=10, ef=10)[0], t) for q, t in zip(queries, truth, strict=True)])
+    high = np.mean([recall(idx.search(q, k=10, ef=400)[0], t) for q, t in zip(queries, truth, strict=True)])
     assert high > low and high >= 0.95
 
 

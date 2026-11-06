@@ -28,8 +28,8 @@ pip install rust-annie
 ```
 
 Pre-built wheels are available for Linux (x86-64, aarch64, musl), macOS (Intel and Apple
-silicon) and Windows (x86-64) for Python ≥ 3.9. NumPy is the only runtime dependency.
-To build from source you need a Rust toolchain (≥ 1.85):
+silicon) and Windows (x86-64) for Python ≥ 3.10. NumPy is the only runtime dependency.
+To build from source you need a Rust toolchain (≥ 1.87):
 
 ```bash
 git clone https://github.com/Programmers-Paradise/Annie.git

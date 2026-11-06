@@ -86,7 +86,7 @@ def load_dataset(name: str, cache: Path, k: int):
 
 
 def recall(found: np.ndarray, gt: np.ndarray) -> float:
-    hits = sum(len(set(f[f >= 0].tolist()) & set(g.tolist())) for f, g in zip(found, gt))
+    hits = sum(len(set(f[f >= 0].tolist()) & set(g.tolist())) for f, g in zip(found, gt, strict=True))
     return hits / gt.size
 
 
