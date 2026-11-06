@@ -99,17 +99,22 @@ documentation, and fuzzes the index API.
 
 Exact search scans vectors stored contiguously in memory with distance kernels that
 the compiler vectorises, keeps a bounded top-*k* buffer, and splits large scans across
-cores with Rayon, without holding the Python global interpreter lock. On a four-core
-laptop, exact search over 100 000 Gaussian vectors of dimension 64 answers about 1 300
-single queries per second, faster than FAISS's flat index restricted to one thread
-(about 700) and 9× faster than a NumPy implementation; for batches of queries the two
-libraries are within 35 % of each other. `rust-annie`'s HNSW index reaches the same
-recall as hnswlib and FAISS for the same parameters but is three to seven times slower
-per query, so users who need maximum approximate-search throughput for Euclidean or
-inner-product similarity should prefer those libraries. The repository includes
-`benchmarks/compare.py`, which reproduces these measurements on synthetic data and on
-the standard ANN-Benchmarks datasets [@aumuller2020annbenchmarks], and reports the full
-results in its documentation.
+cores with Rayon, without holding the Python global interpreter lock.
+\autoref{fig:sift} compares `rust-annie` with hnswlib, FAISS and NumPy on the SIFT-1M
+benchmark [@aumuller2020annbenchmarks] on a four-core laptop. Answering one query at a
+time, exact search in `rust-annie` is about eight times faster than NumPy and faster than
+FAISS's flat index restricted to one thread. For large batches of queries FAISS is about
+ten times faster, because it computes distances as a BLAS matrix product. `rust-annie`'s
+HNSW index reaches the same recall as hnswlib and FAISS for the same parameters, but it
+answers queries about five times more slowly and builds about three times more slowly,
+so users who need maximum approximate-search throughput for Euclidean or inner-product
+similarity should prefer those libraries. `benchmarks/compare.py` in the repository
+reproduces these measurements.
+
+![Recall@10 against queries per second (one query at a time, log scale) on SIFT-1M
+(10⁶ vectors, 128 dimensions, 1 000 queries; HNSW with $M = 16$,
+$ef_\text{construction} = 200$, $ef$ from 10 to 320). Intel Core i5-1135G7, 4 cores.
+\label{fig:sift}](figures/sift-128-euclidean.png)
 
 # Research impact statement
 

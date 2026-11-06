@@ -26,6 +26,7 @@ import csv
 import os
 import platform
 import sys
+import tempfile
 import time
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -77,7 +78,19 @@ def load_dataset(name: str, cache: Path, k: int):
     if not path.exists():
         cache.mkdir(parents=True, exist_ok=True)
         print(f"downloading {URL.format(name)} -> {path}", file=sys.stderr)
-        urllib.request.urlretrieve(URL.format(name), path)
+        # The server rejects urllib's default User-Agent.
+        req = urllib.request.Request(URL.format(name), headers={"User-Agent": "rust-annie-benchmark"})
+        # Download to a unique file in the same directory, then publish it with an
+        # atomic replace, so concurrent runs never see or clobber a partial file.
+        fd, tmp = tempfile.mkstemp(dir=cache, prefix=f".{name}.", suffix=".part")
+        try:
+            with urllib.request.urlopen(req) as r, os.fdopen(fd, "wb") as f:
+                while chunk := r.read(1 << 20):
+                    f.write(chunk)
+            os.replace(tmp, path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
     with h5py.File(path, "r") as f:
         train = np.asarray(f["train"], dtype=np.float32)
         test = np.asarray(f["test"], dtype=np.float32)
@@ -256,7 +269,7 @@ def plot(results: list[Result], path: Path):
         rs = sorted(rs, key=lambda r: r.recall)
         ax.plot([r.recall for r in rs], [r.qps_single for r in rs], "o-", label=label)
     ax.set_xlabel(f"Recall@{results[0].k}")
-    ax.set_ylabel("Queries per second (1 thread, log scale)")
+    ax.set_ylabel("Queries per second, one at a time (log scale)")
     ax.set_yscale("log")
     ax.set_title(results[0].dataset)
     ax.grid(True, which="both", alpha=0.3)
