@@ -104,7 +104,7 @@ mod memory_safety_tests {
         assert_eq!(data.len() % dim, 1); // Remainder should be 1
 
         // This would be an invalid configuration that should be caught
-        assert!(data.len() % dim != 0); // Not evenly divisible
+        assert!(!data.len().is_multiple_of(dim)); // Not evenly divisible
     }
 
     #[test]
