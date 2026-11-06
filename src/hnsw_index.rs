@@ -226,13 +226,26 @@ impl HnswIndex {
             return Ok((Vec::new(), Vec::new()));
         }
         let ef = ef.unwrap_or(self.config.ef_search).max(k);
-        let needs_filter = filter.is_some() || !self.deleted.is_empty();
         let accept = |internal: &usize| -> bool {
             if self.deleted.contains(internal) {
                 return false;
             }
-            filter.map_or(true, |f| f.accepts(self.user_ids[*internal], *internal))
+            filter.is_none_or(|f| f.accepts(self.user_ids[*internal], *internal))
         };
+
+        // Selective filters starve graph traversal (most neighbours are rejected),
+        // which lowers recall. Count the matching vectors first: if there are few
+        // of them, an exact scan over just those is both exact and cheap.
+        let allowed: Option<Vec<usize>> =
+            filter.map(|_| (0..self.user_ids.len()).filter(&accept).collect());
+        if let Some(allowed) = &allowed {
+            let threshold = (ef * self.config.m * 2).max(self.size() / 10);
+            if allowed.len() <= threshold {
+                return Ok(self.exact_over(q, k, allowed));
+            }
+        }
+
+        let needs_filter = filter.is_some() || !self.deleted.is_empty();
         let neighbours = with_graph!(&self.graph, g => {
             if needs_filter {
                 g.search_filter(q, k, ef, Some(&accept))
@@ -245,7 +258,32 @@ impl HnswIndex {
             .filter(|n| accept(&n.d_id))
             .map(|n| (self.user_ids[n.d_id], n.distance))
             .collect();
+        // Safety net: if traversal found fewer than k matches although more exist,
+        // fall back to an exact scan over the matching vectors.
+        if let Some(allowed) = &allowed {
+            if candidates.len() < k.min(allowed.len()) {
+                return Ok(self.exact_over(q, k, allowed));
+            }
+        }
         Ok(search::top_k(candidates, k))
+    }
+
+    /// Exact k-NN over the given internal IDs, using the index metric.
+    fn exact_over(&self, q: &[f32], k: usize, internal_ids: &[usize]) -> (Vec<i64>, Vec<f32>) {
+        let q_norm = search::l2_norm(q);
+        let candidates = internal_ids
+            .iter()
+            .map(|&i| {
+                let v = &self.vectors[i];
+                let d = match self.metric {
+                    // hnsw_rs defines cosine distance of a zero vector as 0
+                    Distance::Cosine() if q_norm == 0.0 || v.iter().all(|x| *x == 0.0) => 0.0,
+                    _ => search::builtin_distance(&self.metric, q, q_norm, v, search::l2_norm(v)),
+                };
+                (self.user_ids[i], d)
+            })
+            .collect();
+        search::top_k(candidates, k)
     }
 
     /// Approximate k-NN search for a batch of queries; flat padded output.

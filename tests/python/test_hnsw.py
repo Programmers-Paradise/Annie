@@ -132,3 +132,20 @@ def test_filter_with_removed(clustered):
     got = idx.search(queries[0], k=10, filter=Filter.id_set(allowed.tolist()))[0]
     assert all(i % 2 == 0 for i in got)
     assert not set(got.tolist()) & set(allowed[:10].tolist())
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_selective_filter_is_exact(seed):
+    """Regression: selective filters used to starve graph traversal and miss matches."""
+    rng = np.random.default_rng(seed)
+    data = rng.standard_normal((2000, 8)).astype(np.float32)
+    ids = np.arange(2000)
+    idx = PyHnswIndex(8)
+    idx.add(data, ids)
+    q = data[0]
+    keep = ids % 10 == 0
+    want, _ = exact_knn(data[keep], ids[keep], q, 5, euclidean)
+    got, _ = idx.search(q, k=5, filter=lambda i: i % 10 == 0)
+    np.testing.assert_array_equal(got, want)
+    got_b, _ = idx.search_batch(q[None, :], k=5, filter=Filter.id_set(ids[keep].tolist()))
+    np.testing.assert_array_equal(got_b[0], want)
