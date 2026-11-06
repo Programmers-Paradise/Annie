@@ -26,6 +26,7 @@ import csv
 import os
 import platform
 import sys
+import tempfile
 import time
 import urllib.request
 from dataclasses import asdict, dataclass
@@ -79,11 +80,17 @@ def load_dataset(name: str, cache: Path, k: int):
         print(f"downloading {URL.format(name)} -> {path}", file=sys.stderr)
         # The server rejects urllib's default User-Agent.
         req = urllib.request.Request(URL.format(name), headers={"User-Agent": "rust-annie-benchmark"})
-        tmp = path.with_suffix(".part")
-        with urllib.request.urlopen(req) as r, open(tmp, "wb") as f:
-            while chunk := r.read(1 << 20):
-                f.write(chunk)
-        tmp.rename(path)
+        # Download to a unique file in the same directory, then publish it with an
+        # atomic replace, so concurrent runs never see or clobber a partial file.
+        fd, tmp = tempfile.mkstemp(dir=cache, prefix=f".{name}.", suffix=".part")
+        try:
+            with urllib.request.urlopen(req) as r, os.fdopen(fd, "wb") as f:
+                while chunk := r.read(1 << 20):
+                    f.write(chunk)
+            os.replace(tmp, path)
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
     with h5py.File(path, "r") as f:
         train = np.asarray(f["train"], dtype=np.float32)
         test = np.asarray(f["test"], dtype=np.float32)
