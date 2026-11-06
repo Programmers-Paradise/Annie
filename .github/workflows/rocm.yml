@@ -1,25 +1,22 @@
+# Experimental ROCm (AMD GPU) build. GitHub-hosted runners have no AMD GPU, so
+# this only runs manually, on a self-hosted runner labelled `rocm`.
+name: ROCm (experimental)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
   rocm:
-    name: ROCm Backend Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, rocm]
     container:
-      image: rocm/dev-ubuntu-20.04:latest
+      image: rocm/dev-ubuntu-22.04:latest
       options: --device=/dev/kfd --device=/dev/dri --group-add video
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Dependencies
-        run: |
-          apt-get update
-          apt-get install -y build-essential pkg-config libclang-dev
-
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Build with ROCm support
-        run: cargo build --features rocm
-
-      - name: Run tests with ROCm
-        run: cargo test --features rocm
+      - run: apt-get update && apt-get install -y build-essential pkg-config libclang-dev python3-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --features rocm
+      - run: cargo test --features rocm

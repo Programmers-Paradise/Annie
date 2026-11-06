@@ -1,0 +1,11 @@
+name: Question
+description: Ask how to use rust-annie
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: Please check the user guide and API reference first.
+    validations:
+      required: true
