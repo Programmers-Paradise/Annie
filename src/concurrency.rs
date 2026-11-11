@@ -4,6 +4,7 @@
 //! re-acquired (for custom metrics or callable filters) while holding a lock.
 //! This ordering rules out GIL/lock deadlocks between Python threads.
 
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use numpy::{AllowTypeChange, PyArrayLike1, PyArrayLike2};
@@ -28,7 +29,8 @@ fn write(lock: &RwLock<AnnIndex>) -> PyResult<RwLockWriteGuard<'_, AnnIndex>> {
 
 /// Thread-safe exact k-NN index.
 ///
-/// Same API as `AnnIndex`, but safe to share between Python threads: any
+/// Like `AnnIndex` (without metrics collection or progress callbacks), but
+/// safe to share between Python threads: any
 /// number of concurrent searches may run alongside each other, while
 /// mutations (`add`, `remove`, `update`, `compact`) take an exclusive lock.
 #[pyclass(module = "rust_annie")]
@@ -94,7 +96,7 @@ impl ThreadSafeAnnIndex {
     pub fn compact(&self, py: Python<'_>) -> PyResult<()> {
         let lock = &self.inner;
         py.allow_threads(|| {
-            write(lock)?.compact_entries();
+            write(lock)?.compact();
             Ok(())
         })
     }
@@ -152,6 +154,50 @@ impl ThreadSafeAnnIndex {
     pub fn load(path: &str) -> PyResult<Self> {
         let p = validate_path_secure(path)?;
         Ok(Self::from_index(AnnIndex::load_from(&p)?))
+    }
+
+    /// Set the fraction of removed slots (0..1) that triggers auto-compaction.
+    pub fn set_max_deleted_ratio(&self, py: Python<'_>, ratio: f32) -> PyResult<()> {
+        let lock = &self.inner;
+        py.allow_threads(|| write(lock)?.set_max_deleted_ratio(ratio))
+    }
+
+    /// IDs of all stored vectors, in storage order.
+    pub fn ids(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let lock = &self.inner;
+        let ids = py.allow_threads(|| Ok::<_, PyErr>(read(lock)?.live_ids()))?;
+        Ok(numpy::PyArray1::from_vec(py, ids).into_any().unbind())
+    }
+
+    /// Distance metric used by this index.
+    #[getter]
+    pub fn metric(&self, py: Python<'_>) -> PyResult<Distance> {
+        let lock = &self.inner;
+        py.allow_threads(|| Ok(read(lock)?.metric.clone()))
+    }
+
+    /// Number of storage slots, including removed entries not yet compacted.
+    pub fn capacity(&self, py: Python<'_>) -> PyResult<usize> {
+        let lock = &self.inner;
+        py.allow_threads(|| Ok(read(lock)?.slot_count()))
+    }
+
+    /// Number of removed entries awaiting compaction.
+    pub fn deleted_count(&self, py: Python<'_>) -> PyResult<usize> {
+        let lock = &self.inner;
+        py.allow_threads(|| Ok(read(lock)?.deleted_count))
+    }
+
+    /// Summary of the index configuration and memory use.
+    pub fn get_info(&self, py: Python<'_>) -> PyResult<HashMap<String, String>> {
+        let lock = &self.inner;
+        py.allow_threads(|| Ok(read(lock)?.info()))
+    }
+
+    /// Check internal consistency; raises `ValueError` describing any issues.
+    pub fn validate(&self, py: Python<'_>) -> PyResult<()> {
+        let lock = &self.inner;
+        py.allow_threads(|| read(lock)?.validate_integrity())
     }
 
     pub fn version(&self, py: Python<'_>) -> PyResult<u64> {

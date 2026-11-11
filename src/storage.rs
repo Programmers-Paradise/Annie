@@ -52,19 +52,41 @@ fn io_err(action: &str, path: &Path, e: impl std::fmt::Display) -> RustAnnError 
     RustAnnError::io_err(format!("Failed to {} {}: {}", action, path.display(), e))
 }
 
+/// Write `magic`, the format version and `payload` to `path` atomically: the
+/// data goes to a temporary file in the same directory, which then replaces
+/// `path`. A failed save therefore never leaves a truncated index behind or
+/// destroys an existing file.
 fn write_file<T: Serialize>(path: &Path, magic: &[u8; 8], payload: &T) -> Result<(), RustAnnError> {
-    let file = File::create(path).map_err(|e| io_err("create", path, e))?;
-    let mut writer = BufWriter::new(file);
-    writer
-        .write_all(magic)
-        .map_err(|e| io_err("write", path, e))?;
-    writer
-        .write_all(&FORMAT_VERSION.to_le_bytes())
-        .map_err(|e| io_err("write", path, e))?;
-    bincode::serialize_into(&mut writer, payload)
-        .map_err(|e| io_err("serialize index to", path, e))?;
-    writer.flush().map_err(|e| io_err("write", path, e))?;
-    Ok(())
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| RustAnnError::io_err(format!("{} is not a file path", path.display())))?;
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(file_name);
+    tmp_name.push(format!(".{}.tmp", std::process::id()));
+    let tmp = path.with_file_name(tmp_name);
+
+    let result = (|| {
+        let file = File::create(&tmp).map_err(|e| io_err("create", path, e))?;
+        let mut writer = BufWriter::new(file);
+        writer
+            .write_all(magic)
+            .map_err(|e| io_err("write", path, e))?;
+        writer
+            .write_all(&FORMAT_VERSION.to_le_bytes())
+            .map_err(|e| io_err("write", path, e))?;
+        bincode::serialize_into(&mut writer, payload)
+            .map_err(|e| io_err("serialize index to", path, e))?;
+        let file = writer
+            .into_inner()
+            .map_err(|e| io_err("write", path, e.error()))?;
+        file.sync_all().map_err(|e| io_err("write", path, e))?;
+        drop(file);
+        std::fs::rename(&tmp, path).map_err(|e| io_err("write", path, e))
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 fn read_header(reader: &mut impl Read, path: &Path) -> Result<IndexKind, RustAnnError> {

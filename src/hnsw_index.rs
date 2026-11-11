@@ -168,6 +168,17 @@ impl HnswIndex {
     /// Insert rows of `data` with the given IDs. Validates all input first.
     pub fn add_rows(&mut self, data: ArrayView2<f32>, ids: &[i64]) -> PyResult<()> {
         search::check_insert(&data, ids, self.dims, |id| self.lookup.contains_key(&id))?;
+        if matches!(self.metric, Distance::Cosine())
+            && data.rows().into_iter().any(|r| r.iter().all(|x| *x == 0.0))
+        {
+            // `hnsw_rs` treats a zero vector as identical to every other vector,
+            // which would put it at the top of every result list.
+            return Err(RustAnnError::py_err(
+                "Invalid Input",
+                "cosine distance is undefined for zero vectors; PyHnswIndex with \
+                 Distance.COSINE does not accept them (AnnIndex does)",
+            ));
+        }
         let start = self.user_ids.len();
         for (row, &id) in data.rows().into_iter().zip(ids) {
             self.lookup.insert(id, self.user_ids.len());
@@ -225,7 +236,13 @@ impl HnswIndex {
         if self.size() == 0 {
             return Ok((Vec::new(), Vec::new()));
         }
-        let ef = ef.unwrap_or(self.config.ef_search).max(k);
+        // Neither k nor ef can usefully exceed the number of stored vectors, and
+        // `hnsw_rs` allocates buffers of size ef, so clamp both.
+        let k = k.min(self.size());
+        let ef = ef
+            .unwrap_or(self.config.ef_search)
+            .min(self.user_ids.len())
+            .max(k);
         let accept = |internal: &usize| -> bool {
             if self.deleted.contains(internal) {
                 return false;
@@ -238,6 +255,16 @@ impl HnswIndex {
         // of them, an exact scan over just those is both exact and cheap.
         let allowed: Option<Vec<usize>> =
             filter.map(|_| (0..self.user_ids.len()).filter(&accept).collect());
+
+        // Cosine distance from a zero query is 1 for every vector (see `AnnIndex`);
+        // the graph cannot rank that, so scan exactly.
+        if matches!(self.metric, Distance::Cosine()) && q.iter().all(|x| *x == 0.0) {
+            let live: Vec<usize> = match allowed {
+                Some(a) => a,
+                None => (0..self.user_ids.len()).filter(&accept).collect(),
+            };
+            return Ok(self.exact_over(q, k, &live));
+        }
         if let Some(allowed) = &allowed {
             let threshold = (ef * self.config.m * 2).max(self.size() / 10);
             if allowed.len() <= threshold {
@@ -275,11 +302,7 @@ impl HnswIndex {
             .iter()
             .map(|&i| {
                 let v = &self.vectors[i];
-                let d = match self.metric {
-                    // hnsw_rs defines cosine distance of a zero vector as 0
-                    Distance::Cosine() if q_norm == 0.0 || v.iter().all(|x| *x == 0.0) => 0.0,
-                    _ => search::builtin_distance(&self.metric, q, q_norm, v, search::l2_norm(v)),
-                };
+                let d = search::builtin_distance(&self.metric, q, q_norm, v, search::l2_norm(v));
                 (self.user_ids[i], d)
             })
             .collect();
@@ -296,12 +319,12 @@ impl HnswIndex {
     ) -> PyResult<(Vec<i64>, Vec<f32>)> {
         search::check_k(k)?;
         search::check_queries(&queries, self.dims)?;
+        // Allocate the output first: fail cleanly before searching if it is too large.
+        let (mut ids, mut dists) = search::batch_buffers(queries.nrows(), k)?;
         let results: Vec<(Vec<i64>, Vec<f32>)> = (0..queries.nrows())
             .into_par_iter()
             .map(|i| self.search_vec(&queries.row(i).to_vec(), k, ef, filter))
             .collect::<PyResult<_>>()?;
-        let mut ids = Vec::with_capacity(results.len() * k);
-        let mut dists = Vec::with_capacity(results.len() * k);
         for (i, d) in results {
             search::push_padded(&mut ids, &mut dists, i, d, k);
         }

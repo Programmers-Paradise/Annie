@@ -125,10 +125,13 @@ pub struct TopK {
 }
 
 impl TopK {
+    /// `k` must be at least 1. Memory is allocated lazily, so a `k` far larger
+    /// than the number of candidates costs nothing.
     pub fn new(k: usize) -> Self {
+        let k = k.max(1);
         TopK {
             k,
-            buf: Vec::with_capacity(2 * k.max(32)),
+            buf: Vec::with_capacity(k.saturating_mul(2).clamp(64, 4096)),
             bound: f32::INFINITY,
         }
     }
@@ -139,7 +142,7 @@ impl TopK {
             return;
         }
         self.buf.push((id, score));
-        if self.buf.len() >= 2 * self.k.max(32) {
+        if self.buf.len() >= self.k.max(32).saturating_mul(2) {
             self.shrink();
         }
     }
@@ -195,6 +198,23 @@ pub fn top_k(mut candidates: Vec<(i64, f32)>, k: usize) -> (Vec<i64>, Vec<f32>) 
     }
     candidates.sort_unstable_by(cmp_candidates);
     candidates.into_iter().unzip()
+}
+
+/// Allocate flat `(n * k)` output buffers for a batch search, raising
+/// `MemoryError` instead of aborting the process when `n * k` is too large.
+pub fn batch_buffers(n: usize, k: usize) -> PyResult<(Vec<i64>, Vec<f32>)> {
+    let too_big = || {
+        pyo3::exceptions::PyMemoryError::new_err(format!(
+            "Cannot allocate results for {} queries with k={}; use a smaller k",
+            n, k
+        ))
+    };
+    let total = n.checked_mul(k).ok_or_else(too_big)?;
+    let mut ids = Vec::new();
+    let mut dists = Vec::new();
+    ids.try_reserve_exact(total).map_err(|_| too_big())?;
+    dists.try_reserve_exact(total).map_err(|_| too_big())?;
+    Ok((ids, dists))
 }
 
 /// Append `(ids, dists)` to flat batch buffers, padding to exactly `k` columns.

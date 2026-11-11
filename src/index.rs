@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ndarray::{Array2, ArrayView2};
-use numpy::{AllowTypeChange, PyArrayLike1, PyArrayLike2, ToPyArray};
+use numpy::{AllowTypeChange, IntoPyArray, PyArrayLike1, PyArrayLike2};
 use pyo3::prelude::*;
 use rayon::prelude::*;
 
@@ -357,6 +357,8 @@ impl AnnIndex {
         search::check_k(k)?;
         search::check_queries(&queries, self.dim)?;
         let n = queries.nrows();
+        // Allocate the output first: fail cleanly before searching if it is too large.
+        let (mut ids, mut dists) = search::batch_buffers(n, k)?;
         let start = Instant::now();
         let per_query: Vec<(Vec<i64>, Vec<f32>)> = match &self.metric {
             Distance::Custom(name) => queries
@@ -376,8 +378,6 @@ impl AnnIndex {
                 .map(|i| self.search_builtin(&queries.row(i).to_vec(), k, filter, false))
                 .collect(),
         };
-        let mut ids = Vec::with_capacity(n * k);
-        let mut dists = Vec::with_capacity(n * k);
         for (i, d) in per_query {
             search::push_padded(&mut ids, &mut dists, i, d, k);
         }
@@ -526,9 +526,10 @@ pub(crate) fn batch_to_numpy(
         .map_err(|e| RustAnnError::py_err("Reshape Error", e.to_string()))?;
     let dists = Array2::from_shape_vec((n, k), dists)
         .map_err(|e| RustAnnError::py_err("Reshape Error", e.to_string()))?;
+    // Hand the buffers to NumPy without copying them.
     Ok((
-        ids.to_pyarray(py).into_any().unbind(),
-        dists.to_pyarray(py).into_any().unbind(),
+        ids.into_pyarray(py).into_any().unbind(),
+        dists.into_pyarray(py).into_any().unbind(),
     ))
 }
 

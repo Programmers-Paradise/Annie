@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Searching with a very large `k` (e.g. `k=10**12`) or `ef` aborted the Python process
+  while pre-allocating result buffers. `search` now returns all matches, and
+  `search_batch` raises `MemoryError` when the `(n, k)` result cannot be allocated.
+- `PyHnswIndex` with `Distance.COSINE` reported distance 0 between a zero vector and every
+  other vector, so zero vectors were returned first for every query, contradicting the
+  documented definition (and `AnnIndex`). Zero vectors are now rejected by `add`, and a
+  zero query returns distance 1 for every vector, as in `AnnIndex`.
+- `ThreadSafeAnnIndex.compact()` did not increment `version()`.
+- A failed `save` (e.g. disk full) could leave a truncated file in place of an existing
+  index. Files are now written to a temporary file and atomically renamed.
+
+### Added
+- `ThreadSafeAnnIndex.ids`, `metric`, `capacity`, `deleted_count`,
+  `set_max_deleted_ratio`, `get_info` and `validate`, matching `AnnIndex`.
+
+### Changed
+- `search_batch` hands its result buffers to NumPy without copying them.
+
 ## [0.3.0] - 2026-11-06
 
 This release fixes many correctness problems and makes the documented API match the
