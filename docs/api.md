@@ -63,7 +63,7 @@ exactly, with every distance equal to 1 as in `AnnIndex`.
 | Method | Description |
 |---|---|
 | `add(data, ids)` | Add vectors (built in parallel). Atomic validation as for `AnnIndex`. |
-| `search(query, k, ef=None, filter=None)` | Approximate neighbours; `ef` (default `ef_search`, at least `k`) trades speed for recall. |
+| `search(query, k, ef=None, filter=None)` | Approximate neighbours; `ef` (default `ef_search`, at least `k`) trades speed for recall. After removals, or when requesting all live vectors, the search falls back to scanning live vectors and returns up to `min(k, live_count)` valid results. |
 | `search_batch(queries, k, ef=None, filter=None)` | Batch version, parallel across queries; `(n, k)` arrays padded with `-1` / `inf`. |
 | `remove(ids)` | Exclude vectors from results. `KeyError` if any ID is absent. |
 | `save(path)` / `PyHnswIndex.load(path)` | Persist vectors and parameters; the graph is rebuilt on load. |
