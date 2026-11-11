@@ -56,7 +56,9 @@ PyHnswIndex(dims: int, metric: Distance = Distance.EUCLIDEAN, m: int = 16,
 ```
 
 `metric` must be `EUCLIDEAN`, `COSINE` or `MANHATTAN`. `m` must be in 2–256. If `config`
-is given it overrides the four individual parameters.
+is given it overrides the four individual parameters. With `COSINE`, `add` rejects
+all-zero vectors (cosine distance is undefined for them); a zero *query* is answered
+exactly, with every distance equal to 1 as in `AnnIndex`.
 
 | Method | Description |
 |---|---|
@@ -87,8 +89,10 @@ ThreadSafeAnnIndex(dim: int, metric: Distance = Distance.EUCLIDEAN)
 
 Same behaviour as `AnnIndex`, safe to share between threads (a readers–writer lock;
 searches run concurrently, mutations are exclusive). Methods: `add`, `search`,
-`search_batch`, `remove`, `update`, `compact`, `save`, `load` (static), `len`, `dim`,
-`version`, `len(index)`, `id in index`.
+`search_batch`, `remove`, `update`, `compact`, `set_max_deleted_ratio`, `save`, `load`
+(static), `ids`, `len`, `dim`, `capacity`, `deleted_count`, `version`, `get_info`,
+`validate`, `len(index)`, `id in index`; property `metric`. Metrics collection
+(`enable_metrics`) and `add_batch_with_progress` are only available on `AnnIndex`.
 
 ## `Index`
 
