@@ -267,7 +267,9 @@ impl HnswIndex {
         // whose distance is 1 to every vector (see `AnnIndex`) so the graph cannot rank it.
         let zero_cosine_query =
             matches!(self.metric, Distance::Cosine()) && q.iter().all(|x| *x == 0.0);
-        if ef >= self.user_ids.len() || zero_cosine_query {
+        // `k == size()` asks for every live vector, which traversal may not reach
+        // when removed vectors remain in the graph.
+        if ef >= self.user_ids.len() || k >= self.size() || zero_cosine_query {
             let live: Vec<usize> = match allowed {
                 Some(a) => a,
                 None => (0..self.user_ids.len()).filter(&accept).collect(),
@@ -296,10 +298,16 @@ impl HnswIndex {
             .collect();
         // Safety net: if traversal found fewer than k matches although more exist,
         // fall back to an exact scan over the matching vectors.
-        if let Some(allowed) = &allowed {
-            if candidates.len() < k.min(allowed.len()) {
+        // (`k` is at most the live count, so without a filter at least k exist.)
+        match &allowed {
+            Some(allowed) if candidates.len() < k.min(allowed.len()) => {
                 return Ok(self.exact_over(q, k, allowed));
             }
+            None if candidates.len() < k => {
+                let live: Vec<usize> = (0..self.user_ids.len()).filter(&accept).collect();
+                return Ok(self.exact_over(q, k, &live));
+            }
+            _ => {}
         }
         Ok(search::top_k(candidates, k))
     }

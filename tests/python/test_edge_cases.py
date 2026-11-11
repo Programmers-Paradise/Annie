@@ -34,6 +34,21 @@ def test_huge_k_batch_raises_memory_error(idx):
     assert ids.shape == (2, 12) and np.all(ids[:, 10:] == -1)
 
 
+@pytest.mark.parametrize("k", [HUGE_K, 300, 290])
+def test_hnsw_after_removals_returns_k_live_results(k):
+    # Removed vectors stay in the graph as routing nodes; searches must still
+    # return min(k, live) results.
+    rng = np.random.default_rng(2)
+    data = rng.random((2000, 8), dtype=np.float32)
+    idx = PyHnswIndex(8, ef_search=10)
+    idx.add(data, np.arange(2000))
+    idx.remove(list(range(0, 2000, 7)) + list(range(1, 2000, 2)))
+    live = len(idx)
+    ids, _ = idx.search(data[0], k=k)
+    assert len(ids) == min(k, live) and len(set(ids.tolist())) == len(ids)
+    assert all(i in idx for i in ids.tolist())
+
+
 def test_hnsw_huge_ef():
     idx = PyHnswIndex(4)
     idx.add(np.random.default_rng(0).random((10, 4)), np.arange(10))
