@@ -154,9 +154,11 @@ assert any_index.kind == "hnsw"
 
 Files start with a magic header and a format version, so loading a file of the wrong
 kind or from an incompatible version fails with a clear `OSError`. Paths are used
-exactly as given. Saving writes to a temporary file in the same directory and then
-replaces the target, so an interrupted or failed save never corrupts an existing file. HNSW files store the vectors and parameters; the graph is rebuilt on
-load (in parallel), which takes about as long as the original construction.
+exactly as given. Saving writes the complete index to a temporary file in the same
+directory, flushes it to disk, and then atomically replaces the target. If saving fails
+—for example, because the disk is full—the existing index file is preserved and the
+temporary file is removed. HNSW files store the vectors and parameters; the graph is
+rebuilt on load (in parallel), which takes about as long as the original construction.
 
 Files written by rust-annie 0.2.x cannot be read by 0.3; rebuild those indexes from the
 original vectors.
