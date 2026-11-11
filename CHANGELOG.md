@@ -17,8 +17,8 @@ All notable changes to this project are documented here. The format follows
   zero query returns distance 1 for every vector, as in `AnnIndex`. Files saved by 0.3.0
   that contain such vectors still load.
 - `PyHnswIndex.search` could return fewer than `k` results when `k` (or `ef`) was at
-  least the index size, because graph traversal occasionally misses a node. When every
-  stored vector fits in the candidate list the index is now scanned exactly.
+  least the index size, or after `remove`, because graph traversal can miss nodes. Such
+  searches now fall back to an exact scan of the live vectors.
 - `ThreadSafeAnnIndex.compact()` did not increment `version()`.
 - A failed `save` (e.g. disk full) could leave a truncated file in place of an existing
   index. Files are now written to a uniquely named temporary file and atomically renamed;
