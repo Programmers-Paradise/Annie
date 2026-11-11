@@ -256,9 +256,12 @@ impl HnswIndex {
         let allowed: Option<Vec<usize>> =
             filter.map(|_| (0..self.user_ids.len()).filter(&accept).collect());
 
-        // Cosine distance from a zero query is 1 for every vector (see `AnnIndex`);
-        // the graph cannot rank that, so scan exactly.
-        if matches!(self.metric, Distance::Cosine()) && q.iter().all(|x| *x == 0.0) {
+        // Scan exactly when every stored vector fits in the candidate list (graph
+        // traversal costs as much and can miss nodes), and for a zero cosine query,
+        // whose distance is 1 to every vector (see `AnnIndex`) so the graph cannot rank it.
+        let zero_cosine_query =
+            matches!(self.metric, Distance::Cosine()) && q.iter().all(|x| *x == 0.0);
+        if ef >= self.user_ids.len() || zero_cosine_query {
             let live: Vec<usize> = match allowed {
                 Some(a) => a,
                 None => (0..self.user_ids.len()).filter(&accept).collect(),
