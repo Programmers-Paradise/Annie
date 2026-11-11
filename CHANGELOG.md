@@ -9,7 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 - Searching with a very large `k` (e.g. `k=10**12`) or `ef` aborted the Python process
   while pre-allocating result buffers. `search` now returns all matches, and
-  `search_batch` raises `MemoryError` when the `(n, k)` result cannot be allocated.
+  `search_batch` raises `MemoryError` when the `(n, k)` result cannot be allocated or
+  exceeds about 4.3 × 10⁹ entries.
 - `PyHnswIndex` with `Distance.COSINE` reported distance 0 between a zero vector and every
   other vector, so zero vectors were returned first for every query, contradicting the
   documented definition (and `AnnIndex`). Zero vectors are now rejected by `add`, and a

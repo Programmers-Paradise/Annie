@@ -200,6 +200,11 @@ pub fn top_k(mut candidates: Vec<(i64, f32)>, k: usize) -> (Vec<i64>, Vec<f32>) 
     candidates.into_iter().unzip()
 }
 
+/// Largest `n * k` a batch search will return (about 4.3e9 entries, 48 GiB of ids and
+/// distances). Some systems (e.g. macOS) overcommit memory, so `try_reserve`
+/// alone does not stop an absurd request from getting the process killed.
+pub const MAX_BATCH_RESULTS: usize = u32::MAX as usize;
+
 /// Allocate flat `(n * k)` output buffers for a batch search, raising
 /// `MemoryError` instead of aborting the process when `n * k` is too large.
 pub fn batch_buffers(n: usize, k: usize) -> PyResult<(Vec<i64>, Vec<f32>)> {
@@ -209,7 +214,10 @@ pub fn batch_buffers(n: usize, k: usize) -> PyResult<(Vec<i64>, Vec<f32>)> {
             n, k
         ))
     };
-    let total = n.checked_mul(k).ok_or_else(too_big)?;
+    let total = n
+        .checked_mul(k)
+        .filter(|&t| t <= MAX_BATCH_RESULTS)
+        .ok_or_else(too_big)?;
     let mut ids = Vec::new();
     let mut dists = Vec::new();
     ids.try_reserve_exact(total).map_err(|_| too_big())?;
