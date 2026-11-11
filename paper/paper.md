@@ -120,7 +120,7 @@ $ef_\text{construction} = 200$, $ef$ from 10 to 320). Intel Core i5-1135G7, 4 co
 
 `rust-annie` is developed in the open by Programmers' Paradise, the technical society
 of Chhattisgarh Swami Vivekanand Technical University, and has received contributions
-from 14 people since its first release in May 2025. It is distributed on PyPI with
+from 15 people since its first release in May 2025. It is distributed on PyPI with
 pre-built wheels for Linux, macOS and Windows. At the time of writing we are not aware
 of published research that uses it. This release makes the library suitable for such
 use: it corrects defects in earlier versions, documents the behaviour of every metric

@@ -157,7 +157,7 @@ kind or from an incompatible version fails with a clear `OSError`. Paths are use
 exactly as given. Saving writes the complete index to a temporary file in the same
 directory, flushes it to disk, and then atomically replaces the target. If saving fails
 —for example, because the disk is full—the existing index file is preserved and the
-temporary file is removed. HNSW files store the vectors and parameters; the graph is
+temporary file is removed. Replacing a file keeps its permissions. HNSW files store the vectors and parameters; the graph is
 rebuilt on load (in parallel), which takes about as long as the original construction.
 
 Files written by rust-annie 0.2.x cannot be read by 0.3; rebuild those indexes from the
