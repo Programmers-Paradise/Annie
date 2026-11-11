@@ -1,5 +1,7 @@
 """Regression tests for edge cases that used to crash or behave inconsistently."""
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -81,7 +83,18 @@ def test_save_is_atomic(tmp_path):
     idx.save(str(path))  # overwrite
     assert len(AnnIndex.load(str(path))) == 3
     assert [p.name for p in tmp_path.iterdir()] == ["index.annie"], "no temporary files left"
+    # A save that fails part-way leaving the old file intact is tested in Rust
+    # (storage::tests::failed_save_keeps_existing_file).
 
-    with pytest.raises(OSError):
-        idx.save(str(tmp_path / "missing-dir" / "index.annie"))
-    assert [p.name for p in tmp_path.iterdir()] == ["index.annie"]
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows may refuse concurrent renames onto one file")
+def test_concurrent_saves_to_same_path(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    path = str(tmp_path / "shared.annie")
+    idx = ThreadSafeAnnIndex(8)
+    idx.add(np.random.default_rng(0).random((2000, 8)), np.arange(2000))
+    with ThreadPoolExecutor(8) as pool:
+        list(pool.map(lambda _: idx.save(path), range(32)))
+    assert len(ThreadSafeAnnIndex.load(path)) == 2000
+    assert [p.name for p in tmp_path.iterdir()] == ["shared.annie"]

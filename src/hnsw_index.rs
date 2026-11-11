@@ -167,7 +167,6 @@ impl HnswIndex {
 
     /// Insert rows of `data` with the given IDs. Validates all input first.
     pub fn add_rows(&mut self, data: ArrayView2<f32>, ids: &[i64]) -> PyResult<()> {
-        search::check_insert(&data, ids, self.dims, |id| self.lookup.contains_key(&id))?;
         if matches!(self.metric, Distance::Cosine())
             && data.rows().into_iter().any(|r| r.iter().all(|x| *x == 0.0))
         {
@@ -179,6 +178,13 @@ impl HnswIndex {
                  Distance.COSINE does not accept them (AnnIndex does)",
             ));
         }
+        self.insert_rows(data, ids)
+    }
+
+    /// Insert rows without the zero-vector check (used when loading files
+    /// written before that check existed).
+    fn insert_rows(&mut self, data: ArrayView2<f32>, ids: &[i64]) -> PyResult<()> {
+        search::check_insert(&data, ids, self.dims, |id| self.lookup.contains_key(&id))?;
         let start = self.user_ids.len();
         for (row, &id) in data.rows().into_iter().zip(ids) {
             self.lookup.insert(id, self.user_ids.len());
@@ -389,7 +395,9 @@ impl HnswIndex {
         let arr = ndarray::Array2::from_shape_vec((n, idx.dims), flat).map_err(|_| {
             RustAnnError::io_err(format!("{} is corrupt", path.display())).into_pyerr()
         })?;
-        idx.add_rows(arr.view(), &ids)?;
+        // Files written by 0.3.0 may contain zero vectors in a cosine index;
+        // keep loading them rather than refusing the whole file.
+        idx.insert_rows(arr.view(), &ids)?;
         Ok(idx)
     }
 

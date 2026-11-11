@@ -4,9 +4,10 @@
 //! followed by a little-endian `u32` format version and a bincode payload.
 //! Deleted entries are never written, so a saved index is always compact.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
@@ -60,13 +61,28 @@ fn write_file<T: Serialize>(path: &Path, magic: &[u8; 8], payload: &T) -> Result
     let file_name = path
         .file_name()
         .ok_or_else(|| RustAnnError::io_err(format!("{} is not a file path", path.display())))?;
+    // Unique per process and per call, so concurrent saves never share a file.
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let mut tmp_name = std::ffi::OsString::from(".");
     tmp_name.push(file_name);
-    tmp_name.push(format!(".{}.tmp", std::process::id()));
+    tmp_name.push(format!(
+        ".{}-{}.tmp",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
     let tmp = path.with_file_name(tmp_name);
 
     let result = (|| {
-        let file = File::create(&tmp).map_err(|e| io_err("create", path, e))?;
+        let file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)
+            .map_err(|e| io_err("create", path, e))?;
+        // Keep the permissions of a file being replaced (e.g. a private 0600 index).
+        if let Ok(meta) = std::fs::metadata(path) {
+            file.set_permissions(meta.permissions())
+                .map_err(|e| io_err("write", path, e))?;
+        }
         let mut writer = BufWriter::new(file);
         writer
             .write_all(magic)
@@ -160,4 +176,56 @@ pub fn save_hnsw(path: &Path, data: &HnswData) -> Result<(), RustAnnError> {
 
 pub fn load_hnsw(path: &Path) -> Result<HnswData, RustAnnError> {
     read_file(path, IndexKind::Hnsw)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A payload that writes some bytes and then fails, like a full disk.
+    struct FailsMidway;
+
+    impl Serialize for FailsMidway {
+        fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            use serde::ser::{Error, SerializeSeq};
+            let mut seq = s.serialize_seq(Some(1000))?;
+            for i in 0..100u64 {
+                seq.serialize_element(&i)?;
+            }
+            Err(S::Error::custom("simulated failure"))
+        }
+    }
+
+    fn scratch_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("rust_annie_{}_{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn failed_save_keeps_existing_file() {
+        let dir = scratch_dir("atomic");
+        let path = dir.join("index.annie");
+        std::fs::write(&path, b"previous contents").unwrap();
+        assert!(write_file(&path, MAGIC_BRUTE, &FailsMidway).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"previous contents");
+        let names: Vec<_> = std::fs::read_dir(&dir).unwrap().collect();
+        assert_eq!(names.len(), 1, "temporary file must be removed");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_keeps_permissions_of_replaced_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch_dir("perms");
+        let path = dir.join("index.annie");
+        std::fs::write(&path, b"old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        write_file(&path, MAGIC_BRUTE, &0u32).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

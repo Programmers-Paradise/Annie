@@ -13,13 +13,15 @@ All notable changes to this project are documented here. The format follows
 - `PyHnswIndex` with `Distance.COSINE` reported distance 0 between a zero vector and every
   other vector, so zero vectors were returned first for every query, contradicting the
   documented definition (and `AnnIndex`). Zero vectors are now rejected by `add`, and a
-  zero query returns distance 1 for every vector, as in `AnnIndex`.
+  zero query returns distance 1 for every vector, as in `AnnIndex`. Files saved by 0.3.0
+  that contain such vectors still load.
 - `PyHnswIndex.search` could return fewer than `k` results when `k` (or `ef`) was at
   least the index size, because graph traversal occasionally misses a node. When every
   stored vector fits in the candidate list the index is now scanned exactly.
 - `ThreadSafeAnnIndex.compact()` did not increment `version()`.
 - A failed `save` (e.g. disk full) could leave a truncated file in place of an existing
-  index. Files are now written to a temporary file and atomically renamed.
+  index. Files are now written to a uniquely named temporary file and atomically renamed;
+  the permissions of a file being replaced are kept.
 
 ### Added
 - `ThreadSafeAnnIndex.ids`, `metric`, `capacity`, `deleted_count`,
